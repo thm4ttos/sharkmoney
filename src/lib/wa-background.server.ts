@@ -19,6 +19,10 @@ export const waitUntilStorage = new AsyncLocalStorage<{ waitUntil?: WaitUntil }>
 export function runInBackground(task: Promise<unknown> | (() => Promise<unknown>)): void {
   const promise = typeof task === "function" ? task() : task;
   const store = waitUntilStorage.getStore();
+  console.log("[wa-background] diagnostic", {
+    hasStore: !!store,
+    hasWaitUntil: typeof store?.waitUntil === "function",
+  });
   const safe = promise.catch((err) => {
     console.error("[wa-background] task failed", err);
   });
