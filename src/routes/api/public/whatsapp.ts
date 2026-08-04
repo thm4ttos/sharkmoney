@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { normalizePhone, phoneLookupVariants } from "@/lib/phone";
-import { runInBackground, waitUntilStorage } from "@/lib/wa-background.server";
+import { runInBackground } from "@/lib/wa-background.server";
 import { extractWhatsappMedia } from "@/lib/wa-media";
 
 const ok = (body: unknown = { ok: true }) =>
@@ -142,12 +142,7 @@ export const Route = createFileRoute("/api/public/whatsapp")({
           }
         });
 
-        const diagStore = waitUntilStorage.getStore();
-        return ok({
-          accepted: true,
-          id: logRow!.id,
-          _diag: { hasStore: !!diagStore, hasWaitUntil: typeof diagStore?.waitUntil === "function" },
-        });
+        return ok({ accepted: true, id: logRow!.id });
       },
     },
   },
