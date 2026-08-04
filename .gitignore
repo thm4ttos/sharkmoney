@@ -1,0 +1,1 @@
+git -C "C:\Users\Thiago\Desktop\CLOUDE" config user.name "Seu Nome" && git -C "C:\Users\Thiago\Desktop\CLOUDE" config user.email "seu@email.com"
