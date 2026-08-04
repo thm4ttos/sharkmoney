@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.appointments_generate_reminders() FROM PUBLIC, anon, authenticated;

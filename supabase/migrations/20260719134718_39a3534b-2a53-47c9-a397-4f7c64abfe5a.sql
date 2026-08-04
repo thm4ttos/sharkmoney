@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS weekly_summary_enabled boolean NOT NULL DEFAULT true;

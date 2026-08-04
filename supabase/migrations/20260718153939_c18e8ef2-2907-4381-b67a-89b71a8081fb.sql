@@ -1,0 +1,1 @@
+ALTER TABLE public.wa_contacts ADD COLUMN IF NOT EXISTS last_query_context jsonb;

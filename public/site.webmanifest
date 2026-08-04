@@ -1,0 +1,14 @@
+{
+  "name": "Shark Money — Seu Assistente Financeiro e Pessoal no WhatsApp",
+  "short_name": "Shark Money",
+  "description": "Organize suas finanças, compromissos e lembretes diretamente pelo WhatsApp. Simples, inteligente e sempre com você.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D1117",
+  "theme_color": "#0D1117",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/og-abio.jpg", "sizes": "1200x630", "type": "image/jpeg" }
+  ]
+}

@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.transactions_history_snapshot() FROM PUBLIC, anon, authenticated;
