@@ -70,6 +70,11 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const waitUntil = (ctx as { waitUntil?: (p: Promise<unknown>) => void } | undefined)?.waitUntil?.bind(ctx);
+    console.error("[server] ENTRY DIAGNOSTIC", JSON.stringify({
+      hasCtx: !!ctx,
+      ctxKeys: ctx && typeof ctx === "object" ? Object.keys(ctx as object) : null,
+      hasWaitUntilFn: typeof (ctx as any)?.waitUntil === "function",
+    }));
     attachWaitUntil(request, waitUntil);
     return waitUntilStorage.run({ waitUntil }, async () => {
       try {
