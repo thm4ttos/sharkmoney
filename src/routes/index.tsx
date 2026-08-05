@@ -38,8 +38,8 @@ export const Route = createFileRoute("/")({
       },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "Shark Money" },
-      { property: "og:url", content: "https://abio.fun" },
-      { property: "og:image", content: "https://abio.fun/og-abio.jpg" },
+      { property: "og:url", content: "https://sharkmoney.site" },
+      { property: "og:image", content: "https://sharkmoney.site/og-abio.jpg" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
       { property: "og:image:alt", content: "Shark Money — Seu Assistente Financeiro e Pessoal no WhatsApp" },
@@ -50,10 +50,10 @@ export const Route = createFileRoute("/")({
         content:
           "Organize suas finanças, compromissos e lembretes diretamente pelo WhatsApp. Simples, inteligente e sempre com você.",
       },
-      { name: "twitter:image", content: "https://abio.fun/og-abio.jpg" },
+      { name: "twitter:image", content: "https://sharkmoney.site/og-abio.jpg" },
     ],
     links: [
-      { rel: "canonical", href: "https://abio.fun" },
+      { rel: "canonical", href: "https://sharkmoney.site" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

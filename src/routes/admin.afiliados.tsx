@@ -29,7 +29,7 @@ export const Route = createFileRoute("/admin/afiliados")({
 const brl = (cents: number) =>
   (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const AFFILIATE_SITE = "https://abio.fun";
+const AFFILIATE_SITE = "https://sharkmoney.site";
 
 function AffiliateLinkCell({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);

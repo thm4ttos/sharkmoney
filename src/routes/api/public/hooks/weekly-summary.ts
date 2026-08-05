@@ -22,7 +22,7 @@ const fail = (s: number, m: string) =>
 const BRL = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 
-const PANEL_URL = "https://abio.fun/app/dashboard";
+const PANEL_URL = "https://sharkmoney.site/app/dashboard";
 
 function ymd(d: Date) {
   const y = d.getFullYear();

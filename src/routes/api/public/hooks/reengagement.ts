@@ -19,7 +19,7 @@ const ok = (b: unknown = { ok: true }) =>
 const fail = (s: number, m: string) =>
   new Response(JSON.stringify({ error: m }), { status: s, headers: { "Content-Type": "application/json" } });
 
-const PANEL_URL = "https://abio.fun/";
+const PANEL_URL = "https://sharkmoney.site/";
 const FOOTER = `\n\n1️⃣ Continuar recebendo lembretes\n2️⃣ Não receber mais esses lembretes`;
 
 const TEMPLATES: string[] = [

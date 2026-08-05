@@ -496,7 +496,7 @@ function PromptsEditor(props: {
         value={props.guestMsg}
         onChange={props.setGuestMsg}
         rows={4}
-        placeholder={"Explique o Shark Money com simpatia e convide para criar conta em abio.fun."}
+        placeholder={"Explique o Shark Money com simpatia e convide para criar conta em sharkmoney.site."}
       />
       <PromptField
         label="Cadastro Concluído"

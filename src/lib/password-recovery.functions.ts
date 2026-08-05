@@ -23,7 +23,7 @@ export const requestPasswordRecovery = createServerFn({ method: "POST" })
     const siteUrl =
       process.env.SITE_URL ??
       process.env.VITE_SITE_URL ??
-      "https://abio.fun";
+      "https://sharkmoney.site";
     const redirectTo = `${siteUrl}/reset-password`;
 
     const identifier = data.identifier.trim();
