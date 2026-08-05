@@ -140,7 +140,7 @@ export const Route = createFileRoute("/api/public/whatsapp")({
               .update({ status: "error", last_error: (e?.message ?? "processor_error").slice(0, 500) })
               .eq("id", logRow!.id);
           }
-        });
+        }, request);
 
         return ok({ accepted: true, id: logRow!.id });
       },

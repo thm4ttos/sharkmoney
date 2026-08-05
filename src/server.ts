@@ -2,7 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { waitUntilStorage } from "./lib/wa-background.server";
+import { attachWaitUntil, waitUntilStorage } from "./lib/wa-background.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -70,6 +70,7 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const waitUntil = (ctx as { waitUntil?: (p: Promise<unknown>) => void } | undefined)?.waitUntil?.bind(ctx);
+    attachWaitUntil(request, waitUntil);
     return waitUntilStorage.run({ waitUntil }, async () => {
       try {
         const handler = await getServerEntry();
