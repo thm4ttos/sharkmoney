@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { normalizePhone, phoneLookupVariants } from "@/lib/phone";
-import { runInBackground } from "@/lib/wa-background.server";
 import { extractWhatsappMedia } from "@/lib/wa-media";
 
 const ok = (body: unknown = { ok: true }) =>
@@ -114,33 +113,32 @@ export const Route = createFileRoute("/api/public/whatsapp")({
 
         // Sem ACK: nada é enviado antes da interpretação completa.
 
-
-
-        // ===== PROCESSAMENTO EM BACKGROUND (waitUntil) =====
-        // Não bloqueia a resposta ao webhook. Marca status=processing para
-        // evitar corrida com o cron watchdog.
+        // ===== PROCESSAMENTO SÍNCRONO =====
+        // Este runtime não está entregando um `ctx.waitUntil` utilizável ao
+        // handler (o Worker encerra a execução assim que a Response é
+        // enviada, matando qualquer tarefa "em background" antes dela
+        // terminar). Para não depender desse mecanismo, processamos a
+        // mensagem por completo ANTES de responder ao webhook da Z-API.
         await supabaseAdmin.from("whatsapp_messages")
           .update({ status: "processing", processing_started_at: new Date().toISOString() })
           .eq("id", logRow!.id);
 
-        runInBackground(async () => {
+        try {
+          const { processInboundMessage } = await import("@/lib/wa-processor.server");
+          await processInboundMessage(logRow!.id);
+        } catch (e: any) {
+          console.error("[wa-webhook] processor crashed", e);
           try {
-            const { processInboundMessage } = await import("@/lib/wa-processor.server");
-            await processInboundMessage(logRow!.id);
-          } catch (e: any) {
-            console.error("[wa-webhook] background processor crashed", e);
-            try {
-              const { sendWhatsAppText } = await import("@/lib/uazapi.server");
-              await sendWhatsAppText(
-                replyPhone,
-                "⚠️ Ocorreu um erro ao processar sua mensagem. Vou tentar novamente automaticamente.",
-              );
-            } catch {}
-            await supabaseAdmin.from("whatsapp_messages")
-              .update({ status: "error", last_error: (e?.message ?? "processor_error").slice(0, 500) })
-              .eq("id", logRow!.id);
-          }
-        }, request);
+            const { sendWhatsAppText } = await import("@/lib/uazapi.server");
+            await sendWhatsAppText(
+              replyPhone,
+              "⚠️ Ocorreu um erro ao processar sua mensagem. Vou tentar novamente automaticamente.",
+            );
+          } catch {}
+          await supabaseAdmin.from("whatsapp_messages")
+            .update({ status: "error", last_error: (e?.message ?? "processor_error").slice(0, 500) })
+            .eq("id", logRow!.id);
+        }
 
         return ok({ accepted: true, id: logRow!.id });
       },
