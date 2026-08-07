@@ -107,9 +107,9 @@ function Page() {
               <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.06)" />
               <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={11} />
               <YAxis stroke="oklch(0.714 0.019 261.3)" fontSize={11} />
-              <Tooltip contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.544 0.252 262.5 / 45%)", borderRadius: 12, color: "white" }} />
+              <Tooltip contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.541 0.246 293 / 45%)", borderRadius: 12, color: "white" }} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="in" name="Recebidas" fill="oklch(0.544 0.252 262.5)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="in" name="Recebidas" fill="oklch(0.541 0.246 293)" radius={[6, 6, 0, 0]} />
               <Bar dataKey="out" name="Enviadas" fill="oklch(0.723 0.192 149.6)" radius={[6, 6, 0, 0]} />
               <Bar dataKey="ai" name="IA" fill="oklch(0.861 0.173 91.9)" radius={[6, 6, 0, 0]} />
             </BarChart>

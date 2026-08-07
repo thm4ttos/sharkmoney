@@ -2,7 +2,7 @@ import { ArrowDownRight, ArrowUpRight, TrendingUp, Utensils, Car, Home, Heart, S
 
 const cats = [
   { name: "Alimentação", value: 38, color: "oklch(0.723 0.192 149.6)", icon: Utensils },
-  { name: "Transporte", value: 22, color: "oklch(0.544 0.252 262.5)", icon: Car },
+  { name: "Transporte", value: 22, color: "oklch(0.541 0.246 293)", icon: Car },
   { name: "Moradia", value: 18, color: "oklch(0.75 0.18 200)", icon: Home },
   { name: "Saúde", value: 12, color: "oklch(0.78 0.18 25)", icon: Heart },
   { name: "Lazer", value: 10, color: "oklch(0.82 0.18 80)", icon: Sparkles },

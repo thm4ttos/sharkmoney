@@ -12,7 +12,7 @@ import { Counter, Reveal, StaggerGroup, StaggerItem } from "./Reveal";
 
 const cats = [
   { name: "Alimentação", value: 38, color: "oklch(0.79 0.24 145)" },
-  { name: "Transporte", value: 22, color: "oklch(0.544 0.252 262.5)" },
+  { name: "Transporte", value: 22, color: "oklch(0.541 0.246 293)" },
   { name: "Moradia", value: 18, color: "oklch(0.75 0.18 200)" },
   { name: "Saúde", value: 12, color: "oklch(0.78 0.18 25)" },
   { name: "Lazer", value: 10, color: "oklch(0.82 0.18 80)" },

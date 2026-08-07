@@ -57,7 +57,7 @@ export const upsertHabit = createServerFn({ method: "POST" })
       user_id: userId,
       name: data.name.trim(),
       icon: data.icon || "Sparkles",
-      color: data.color || "#0A5BFF",
+      color: data.color || "#7C3AED",
       category: data.category ?? null,
       target_daily: data.target_daily ?? 1,
       target_weekly: data.target_weekly ?? null,

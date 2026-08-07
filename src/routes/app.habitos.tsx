@@ -24,7 +24,7 @@ const WEEKDAYS = [
   { i: 3, s: "Q" }, { i: 4, s: "Q" }, { i: 5, s: "S" }, { i: 6, s: "S" },
 ];
 
-const COLORS = ["#0A5BFF", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#eab308", "#3b82f6"];
+const COLORS = ["#7C3AED", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#eab308", "#3b82f6"];
 
 const PRESET_HABITS = [
   "Academia", "Caminhada", "Corrida", "Dormir cedo", "Ler 30 minutos",
@@ -268,7 +268,7 @@ function Page() {
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} />
                   <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12 }} />
-                  <Line type="monotone" dataKey="percent" stroke="#0A5BFF" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="percent" stroke="#7C3AED" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

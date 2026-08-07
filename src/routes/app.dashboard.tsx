@@ -34,7 +34,7 @@ const BRL = (n: number) =>
 
 const DONUT_COLORS = [
   "oklch(0.723 0.192 149.6)",
-  "oklch(0.544 0.252 262.5)",
+  "oklch(0.541 0.246 293)",
   "oklch(0.75 0.20 200)",
   "oklch(0.861 0.173 91.9)",
   "oklch(0.637 0.208 25.3)",
@@ -43,7 +43,7 @@ const DONUT_COLORS = [
 
 const TT = {
   background: "oklch(0.239 0.018 266.2)",
-  border: "1px solid oklch(0.544 0.252 262.5 / 45%)",
+  border: "1px solid oklch(0.541 0.246 293 / 45%)",
   borderRadius: 12,
   color: "white",
 };
@@ -221,15 +221,15 @@ function DashboardPage() {
                     <AreaChart data={cd.balanceSeries} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <defs>
                         <linearGradient id="saldoFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="oklch(0.544 0.252 262.5)" stopOpacity={0.5} />
-                          <stop offset="100%" stopColor="oklch(0.544 0.252 262.5)" stopOpacity={0} />
+                          <stop offset="0%" stopColor="oklch(0.541 0.246 293)" stopOpacity={0.5} />
+                          <stop offset="100%" stopColor="oklch(0.541 0.246 293)" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.06)" />
                       <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={11} />
                       <YAxis stroke="oklch(0.714 0.019 261.3)" fontSize={11} tickFormatter={(v) => `R$${Math.round(v / 1000)}k`} />
                       <Tooltip contentStyle={TT} formatter={(v: any) => BRL(Number(v))} />
-                      <Area type="monotone" dataKey="saldo" stroke="oklch(0.544 0.252 262.5)" strokeWidth={2.5} fill="url(#saldoFill)" />
+                      <Area type="monotone" dataKey="saldo" stroke="oklch(0.541 0.246 293)" strokeWidth={2.5} fill="url(#saldoFill)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>

@@ -26,11 +26,11 @@ export const Route = createFileRoute("/admin/financeiro")({
 });
 
 const COLORS = [
-  "oklch(0.544 0.252 262.5)",
+  "oklch(0.541 0.246 293)",
   "oklch(0.723 0.192 149.6)",
   "oklch(0.861 0.173 91.9)",
   "oklch(0.637 0.208 25.3)",
-  "oklch(0.715 0.155 249.4)",
+  "oklch(0.72 0.16 293)",
 ];
 
 function brl(v: number) {
@@ -112,9 +112,9 @@ function Page() {
                 <YAxis stroke="oklch(0.714 0.019 261.3)" fontSize={11} tickFormatter={(v) => `R$${v}`} />
                 <Tooltip
                   formatter={(v: any) => brl(Number(v))}
-                  contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.544 0.252 262.5 / 45%)", borderRadius: 12, color: "white" }}
+                  contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.541 0.246 293 / 45%)", borderRadius: 12, color: "white" }}
                 />
-                <Line type="monotone" dataKey="receita" stroke="oklch(0.544 0.252 262.5)" strokeWidth={3} dot={{ r: 4, fill: "oklch(0.544 0.252 262.5)" }} />
+                <Line type="monotone" dataKey="receita" stroke="oklch(0.541 0.246 293)" strokeWidth={3} dot={{ r: 4, fill: "oklch(0.541 0.246 293)" }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -143,7 +143,7 @@ function Page() {
                   ))}
                 </Pie>
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.544 0.252 262.5 / 45%)", borderRadius: 12, color: "white" }} />
+                <Tooltip contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.541 0.246 293 / 45%)", borderRadius: 12, color: "white" }} />
               </PieChart>
             </ResponsiveContainer>
           </div>

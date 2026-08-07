@@ -105,15 +105,15 @@ function AdminDashboard() {
               <AreaChart data={data?.growth ?? []}>
                 <defs>
                   <linearGradient id="growthGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="oklch(0.544 0.252 262.5)" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="oklch(0.544 0.252 262.5)" stopOpacity={0} />
+                    <stop offset="0%" stopColor="oklch(0.541 0.246 293)" stopOpacity={0.6} />
+                    <stop offset="100%" stopColor="oklch(0.541 0.246 293)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.05)" />
                 <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={10} interval={3} />
                 <YAxis stroke="oklch(0.714 0.019 261.3)" fontSize={10} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.544 0.252 262.5 / 45%)", borderRadius: 12, color: "white" }} />
-                <Area type="monotone" dataKey="novos" stroke="oklch(0.544 0.252 262.5)" strokeWidth={2} fill="url(#growthGrad)" />
+                <Tooltip contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.541 0.246 293 / 45%)", borderRadius: 12, color: "white" }} />
+                <Area type="monotone" dataKey="novos" stroke="oklch(0.541 0.246 293)" strokeWidth={2} fill="url(#growthGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -135,8 +135,8 @@ function AdminDashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.05)" />
                 <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={10} />
                 <YAxis stroke="oklch(0.714 0.019 261.3)" fontSize={10} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.544 0.252 262.5 / 45%)", borderRadius: 12, color: "white" }} />
-                <Bar dataKey="in" name="Recebidas" fill="oklch(0.544 0.252 262.5)" radius={[6, 6, 0, 0]} />
+                <Tooltip contentStyle={{ background: "oklch(0.239 0.018 266.2)", border: "1px solid oklch(0.541 0.246 293 / 45%)", borderRadius: 12, color: "white" }} />
+                <Bar dataKey="in" name="Recebidas" fill="oklch(0.541 0.246 293)" radius={[6, 6, 0, 0]} />
                 <Bar dataKey="out" name="Enviadas" fill="oklch(0.723 0.192 149.6)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
