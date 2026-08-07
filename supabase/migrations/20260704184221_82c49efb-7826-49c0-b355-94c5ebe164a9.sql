@@ -69,7 +69,7 @@ SELECT cron.schedule(
   '* * * * *',
   $cmd$
   SELECT net.http_post(
-    url := 'https://project--aac711e9-4a90-40c4-8d46-cc953ada334b.lovable.app/api/public/hooks/wa-reprocess',
+    url := 'https://abio.fun/api/public/hooks/wa-reprocess',
     headers := '{"Content-Type":"application/json"}'::jsonb,
     body := '{"limit":50}'::jsonb
   );
@@ -82,7 +82,7 @@ SELECT cron.schedule(
   $cmd$
   SELECT pg_sleep(30);
   SELECT net.http_post(
-    url := 'https://project--aac711e9-4a90-40c4-8d46-cc953ada334b.lovable.app/api/public/hooks/wa-reprocess',
+    url := 'https://abio.fun/api/public/hooks/wa-reprocess',
     headers := '{"Content-Type":"application/json"}'::jsonb,
     body := '{"limit":50}'::jsonb
   );
