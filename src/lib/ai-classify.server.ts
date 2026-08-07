@@ -352,9 +352,12 @@ const SYSTEM_WHATSAPP = `Você é o Shark Money, assistente financeiro pessoal n
 
 // Sem timeout no fetch, uma trava pontual da OpenAI prende a mensagem MUITO
 // além do necessário (o único limite seria o timeout genérico da plataforma).
-// 25s cobre folgadamente até as chamadas com imagem/PDF anexado; se estourar,
-// conta como falha transitória e cai no retry normal abaixo.
-const OPENAI_ATTEMPT_TIMEOUT_MS = 25_000;
+// Precisa ser generoso: análise de imagem/PDF com visão pode legitimamente
+// passar de 25-30s, e como o processamento agora é síncrono (responde ao
+// webhook só depois de terminar), abortar cedo demais mata a mensagem no
+// meio — o retry com o mesmo limite curto só empilha timeouts em vez de
+// resolver. 55s cobre folgadamente até os casos mais pesados.
+const OPENAI_ATTEMPT_TIMEOUT_MS = 55_000;
 
 async function openaiChat(body: any, key: string) {
   // Retry com backoff exponencial (até 5 tentativas) para erros transitórios
