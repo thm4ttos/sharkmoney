@@ -471,7 +471,7 @@ Pelo painel você pode acompanhar:
 🎯 Metas financeiras
 
 🌐 Acesse agora:
-https://sharkmoney.site
+https://abio.fun
 
 Caso ainda não tenha uma conta, clique em Criar conta e aproveite 7 dias gratuitos.`,
   };

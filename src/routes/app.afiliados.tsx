@@ -17,7 +17,7 @@ export const Route = createFileRoute("/app/afiliados")({
 });
 
 const brl = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const SITE = "https://sharkmoney.site";
+const SITE = "https://abio.fun";
 
 function Page() {
   const qc = useQueryClient();

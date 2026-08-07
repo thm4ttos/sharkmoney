@@ -504,7 +504,7 @@ export function withName(text: string, name?: string | null): string {
  *
  * Retorna um trecho pronto (com quebras) para concatenar ou string vazia.
  */
-export const DASHBOARD_URL = "https://sharkmoney.site";
+export const DASHBOARD_URL = "https://abio.fun";
 const LINK_EVERY = 4;
 
 const DASHBOARD_LINES = [
