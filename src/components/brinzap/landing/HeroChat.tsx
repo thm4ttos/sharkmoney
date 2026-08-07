@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCheck, FileText, Image as ImageIcon, Mic, Sparkles, Wallet } from "lucide-react";
-import sharkLogo from "@/assets/shark-money-logo.png.asset.json";
+// Antes apontava pra um asset hospedado no Lovable (/__l5e/assets-v1/...),
+// que só existe na infraestrutura deles — 404 em qualquer outro deploy.
+const sharkLogo = { url: "/favicon.png" };
 
 type UserMsg =
   | { media: "text"; text: string }
