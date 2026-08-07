@@ -1,6 +1,6 @@
 // Verifica contas fixas e envia mensagens de confirmação de pagamento.
 //
-// Fluxo (spec Shark Money):
+// Fluxo (spec Abio):
 //  • mode=morning (09:00 SP): para contas ativas com next_due_at = hoje,
 //    envia UMA mensagem por usuário perguntando se já pagou. Agrupa todas
 //    as contas do dia. Marca payment_status='awaiting', awaiting_for=hoje

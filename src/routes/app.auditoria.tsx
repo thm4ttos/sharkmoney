@@ -18,9 +18,9 @@ import {
 export const Route = createFileRoute("/app/auditoria")({
   head: () => ({
     meta: [
-      { title: "Auditoria financeira — Shark Money" },
+      { title: "Auditoria financeira — Abio" },
       { name: "description", content: "Relação auditável das transações que compõem o seu saldo no abio: período, origem, vínculos, duplicidades e correções." },
-      { property: "og:title", content: "Auditoria financeira — Shark Money" },
+      { property: "og:title", content: "Auditoria financeira — Abio" },
       { property: "og:description", content: "Veja, filtre por período e corrija exatamente os lançamentos que formam o seu saldo." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

@@ -7,7 +7,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianG
 import { getFreedomSnapshot, upsertAsset, deleteAsset } from "@/lib/freedom.functions";
 
 export const Route = createFileRoute("/app/liberdade")({
-  head: () => ({ meta: [{ title: "Liberdade Financeira · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Liberdade Financeira · Abio" }] }),
   component: Page,
 });
 const BRL = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n ?? 0);

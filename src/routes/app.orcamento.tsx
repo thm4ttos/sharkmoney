@@ -6,7 +6,7 @@ import { PiggyBank, Plus, Trash2 } from "lucide-react";
 import { listBudgets, upsertBudget, deleteBudget } from "@/lib/budgets.functions";
 
 export const Route = createFileRoute("/app/orcamento")({
-  head: () => ({ meta: [{ title: "Orçamento · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Orçamento · Abio" }] }),
   component: Page,
 });
 

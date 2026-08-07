@@ -1,6 +1,6 @@
 // SERVER-ONLY — Score de confiança para criação automática de lembretes.
 //
-// Regra de produto (Shark Money V2 — "resolva, não pergunte"):
+// Regra de produto (Abio V2 — "resolva, não pergunte"):
 //   >= 0.50 → cria automaticamente (só confirma DEPOIS, sem perguntar antes)
 //   <  0.50 → pergunta / oferece opções (ambiguidade real)
 //

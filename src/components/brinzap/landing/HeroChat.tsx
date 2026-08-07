@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCheck, FileText, Image as ImageIcon, Mic, Sparkles, Wallet } from "lucide-react";
 // Antes apontava pra um asset hospedado no Lovable (/__l5e/assets-v1/...),
 // que só existe na infraestrutura deles — 404 em qualquer outro deploy.
-const sharkLogo = { url: "/favicon.png" };
+const abioLogo = { url: "/favicon.png" };
 
 type UserMsg =
   | { media: "text"; text: string }
@@ -24,7 +24,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: "text-expense",
     user: { media: "text", text: "Gastei 50 no mercado" },
-    thinking: "Shark Money está analisando...",
+    thinking: "Abio está analisando...",
     reply: ["✅ Gasto registrado!", "🛒 Mercado", "💰 R$ 50,00", "🏷️ Alimentação"],
     delta: -50,
   },
@@ -80,7 +80,7 @@ const SCENARIOS: Scenario[] = [
     id: "image-event",
     user: { media: "image", caption: "Print do evento" },
     thinking: "Identificando o evento...",
-    reply: ["📅 Evento identificado!", "Onboarding Shark Money", "04/08", "19:00"],
+    reply: ["📅 Evento identificado!", "Onboarding Abio", "04/08", "19:00"],
   },
   {
     id: "query-month",
@@ -204,8 +204,8 @@ export function HeroChat() {
         <div className="flex items-center gap-3 px-4 py-3 bg-secondary border-b border-border">
           <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#0D1117] grid place-items-center ring-1 ring-border">
             <img
-              src={sharkLogo.url}
-              alt="Shark Money"
+              src={abioLogo.url}
+              alt="Abio"
               width={36}
               height={36}
               className="h-full w-full object-contain p-0.5"
@@ -214,7 +214,7 @@ export function HeroChat() {
             />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">Shark Money</p>
+            <p className="text-sm font-medium truncate">Abio</p>
             <p className="text-[11px] text-neon">{typing ? "digitando…" : "online"}</p>
           </div>
           <span className="h-2 w-2 rounded-full bg-neon animate-pulse-glow" />

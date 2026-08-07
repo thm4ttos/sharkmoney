@@ -220,7 +220,7 @@ A partir de agora vou acompanhar sua vida financeira diariamente.
 
 Sempre que você enviar mensagens, áudios ou imagens, organizarei tudo automaticamente. Também enviarei lembretes antes dos vencimentos, resumos semanais e análises inteligentes para ajudá-lo a economizar mais.
 
-Obrigado por confiar no Shark Money! 🚀`;
+Obrigado por confiar no Abio! 🚀`;
 }
 
 export async function getOnboarding(userId: string) {
@@ -244,7 +244,7 @@ export async function ensureOnboardingRow(userId: string) {
 }
 
 export function inviteMessage(): string {
-  return `🎉 *Seja muito bem-vindo ao Shark Money!*
+  return `🎉 *Seja muito bem-vindo ao Abio!*
 
 Agora você tem um assistente financeiro inteligente disponível diretamente no seu WhatsApp.
 
@@ -305,7 +305,7 @@ export async function handleOnboardingMessage(
         handled: true,
         reply: `Perfeito! 😊
 
-Você já pode utilizar o Shark Money normalmente. Sempre que quiser concluir sua configuração basta enviar:
+Você já pode utilizar o Abio normalmente. Sempre que quiser concluir sua configuração basta enviar:
 
 *Configurar minha conta*
 

@@ -16,7 +16,7 @@ export function Features() {
         <div className="max-w-2xl mb-14">
           <span className="text-xs uppercase tracking-[0.2em] text-primary">Inteligência</span>
           <h2 className="font-display text-4xl md:text-5xl mt-3">
-            Você fala. O Shark Money <span className="text-gradient-brand">organiza.</span>
+            Você fala. O Abio <span className="text-gradient-brand">organiza.</span>
           </h2>
           <p className="text-muted-foreground mt-3">
             Esqueça planilhas e formulários. Aqui o controle financeiro acontece na sua conversa do dia a dia.

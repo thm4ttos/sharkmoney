@@ -342,7 +342,7 @@ export const sendWhatsAppTest = createServerFn({ method: "POST" })
     const first = ((profile as any)?.name ?? "").split(" ")[0] || "tudo certo";
     const res = await sendWhatsAppText(
       phone,
-      `✅ *Shark Money* — Teste de conexão\n\nOlá ${first}! Esta é uma mensagem de teste enviada do painel para confirmar que seu WhatsApp está conectado corretamente.`,
+      `✅ *Abio* — Teste de conexão\n\nOlá ${first}! Esta é uma mensagem de teste enviada do painel para confirmar que seu WhatsApp está conectado corretamente.`,
     );
     return { ok: res.ok, status: res.status, error: res.error };
   });

@@ -54,7 +54,7 @@ const INTROS_WITH_DATA: ((firstName: string) => string)[] = [
   (n) => `👏 *Hora de conferir sua evolução financeira${n ? `, ${n}` : ""}!*\n\nSeparei um resumo completo da sua semana.`,
   (n) => `📈 *Mais uma semana registrada${n ? `, ${n}` : ""}!*\n\nVeja abaixo como ficaram suas finanças.`,
   (n) => `✨ *Seu relatório semanal acabou de ficar pronto${n ? `, ${n}` : ""}!*\n\nOlha só como foi sua semana financeira.`,
-  (n) => `💙 *O Shark Money organizou toda a sua semana${n ? `, ${n}` : ""}!*\n\nConfira seu resumo abaixo e acompanhe sua evolução.`,
+  (n) => `💙 *O Abio organizou toda a sua semana${n ? `, ${n}` : ""}!*\n\nConfira seu resumo abaixo e acompanhe sua evolução.`,
 ];
 
 const PANEL_INVITE =
@@ -297,7 +297,7 @@ async function buildWeeklyMessage(userId: string, name: string, now: Date) {
 
   if (list.length === 0) {
     const greet = firstName ? `Olá, ${firstName}!\n\n` : "";
-    return `📊 *Fechamento Semanal Shark Money*\n\n${greet}Esta semana você ainda não registrou movimentações. Que tal começar amanhã? 💙`;
+    return `📊 *Fechamento Semanal Abio*\n\n${greet}Esta semana você ainda não registrou movimentações. Que tal começar amanhã? 💙`;
   }
 
   const isIncome = (t: any) => (t.kind ?? t.type) === "income";
@@ -331,7 +331,7 @@ async function buildWeeklyMessage(userId: string, name: string, now: Date) {
   if (achieved.length > 0) tips.push(`🏆 Você bateu a meta *${achieved[0].title}*! Parabéns!`);
 
   const lines: string[] = [];
-  lines.push(`📊 *Fechamento Semanal Shark Money*`);
+  lines.push(`📊 *Fechamento Semanal Abio*`);
   if (firstName) lines.push(`\nOlá, ${firstName}! 👋`);
   lines.push(``);
   lines.push(`💰 *Receitas:* ${BRL(income)}`);
@@ -379,7 +379,7 @@ async function buildMonthlyMessage(userId: string, name: string, now: Date) {
 
   if (list.length === 0) {
     const greet = firstName ? `Olá, ${firstName}!\n\n` : "";
-    return `📆 *Fechamento de ${monthName} — Shark Money*\n\n${greet}Este mês você ainda não registrou movimentações. Vamos começar? 💙`;
+    return `📆 *Fechamento de ${monthName} — Abio*\n\n${greet}Este mês você ainda não registrou movimentações. Vamos começar? 💙`;
   }
 
   const isIncome = (t: any) => (t.kind ?? t.type) === "income";
@@ -431,7 +431,7 @@ async function buildMonthlyMessage(userId: string, name: string, now: Date) {
   lines.push(``);
   lines.push(`━━━━━━━━━━━━━━`);
   if (balance > 0) lines.push(`🎉 Mês positivo! Seu saldo foi de *${BRL(balance)}*.`);
-  else lines.push(`⚠️ Mês negativo. Foco no próximo — o Shark Money ajuda.`);
+  else lines.push(`⚠️ Mês negativo. Foco no próximo — o Abio ajuda.`);
   lines.push(``);
   lines.push(`🔗 ${PANEL_URL}`);
   return lines.join("\n");

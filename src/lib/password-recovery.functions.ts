@@ -117,7 +117,7 @@ export const requestPasswordRecovery = createServerFn({ method: "POST" })
     }
 
     const message =
-      `🔐 *Shark Money - Recuperação de Senha*\n\n` +
+      `🔐 *Abio - Recuperação de Senha*\n\n` +
       `Recebemos uma solicitação para redefinir sua senha.\n` +
       `Clique no link abaixo para criar uma nova senha:\n\n` +
       `${actionLink}\n\n` +

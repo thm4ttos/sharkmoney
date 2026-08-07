@@ -7,7 +7,7 @@ import { Phone, Mail, User } from "lucide-react";
 import { PasswordInput, PasswordStrengthMeter, passwordStrength } from "@/components/brinzap/PasswordInput";
 
 export const Route = createFileRoute("/signup")({
-  head: () => ({ meta: [{ title: "Criar conta · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Criar conta · Abio" }] }),
   component: SignupPage,
 });
 

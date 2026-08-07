@@ -10,7 +10,7 @@ import { adminSystemMetrics } from "@/lib/sistema.functions";
 import { getDemoDataStats, cleanupDemoData } from "@/lib/admin-cleanup.functions";
 
 export const Route = createFileRoute("/admin/sistema")({
-  head: () => ({ meta: [{ title: "Sistema · Shark Money Admin" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Sistema · Abio Admin" }, { name: "robots", content: "noindex" }] }),
   component: Page,
 });
 
@@ -47,7 +47,7 @@ function Page() {
           </div>
           <div>
             <h1 className="font-display text-3xl">Central de Sistema</h1>
-            <p className="text-sm text-muted-foreground">Controle total da operação Shark Money em tempo real.</p>
+            <p className="text-sm text-muted-foreground">Controle total da operação Abio em tempo real.</p>
           </div>
         </div>
         <button

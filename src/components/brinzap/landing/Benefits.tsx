@@ -18,7 +18,7 @@ const items = [
     icon: Wallet,
     stat: <Counter to={420} prefix="R$ " />,
     title: "Economia média/mês",
-    desc: "Quem enxerga para onde o dinheiro vai gasta menos. O Shark Money mostra isso todo dia.",
+    desc: "Quem enxerga para onde o dinheiro vai gasta menos. O Abio mostra isso todo dia.",
   },
   {
     icon: ShieldCheck,
@@ -38,7 +38,7 @@ export function Benefits() {
             Menos esforço. <span className="text-gradient-brand">Muito mais controle.</span>
           </h2>
           <p className="text-muted-foreground mt-3 text-base md:text-lg">
-            O Shark Money tira o trabalho chato do seu caminho e devolve clareza sobre o seu dinheiro.
+            O Abio tira o trabalho chato do seu caminho e devolve clareza sobre o seu dinheiro.
           </p>
         </Reveal>
 

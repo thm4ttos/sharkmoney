@@ -5,7 +5,7 @@ import { Activity, CheckCircle2, XCircle, RefreshCw, Loader2 } from "lucide-reac
 import { adminSystemHealth } from "@/lib/system-health.functions";
 
 export const Route = createFileRoute("/admin/diagnostico")({
-  head: () => ({ meta: [{ title: "Diagnóstico · Shark Money Admin" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Diagnóstico · Abio Admin" }, { name: "robots", content: "noindex" }] }),
   component: Page,
 });
 
@@ -30,7 +30,7 @@ function Page() {
           </div>
           <div>
             <h1 className="font-display text-3xl">Diagnóstico do sistema</h1>
-            <p className="text-sm text-muted-foreground">Status em tempo real de todos os módulos do Shark Money.</p>
+            <p className="text-sm text-muted-foreground">Status em tempo real de todos os módulos do Abio.</p>
           </div>
         </div>
         <button

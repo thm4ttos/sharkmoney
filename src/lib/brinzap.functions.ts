@@ -480,7 +480,7 @@ export const sendWelcomeWhatsapp = createServerFn({ method: "POST" })
 
     const { inviteMessage, ensureOnboardingRow } = await import("@/lib/onboarding.server");
     await ensureOnboardingRow(profile.id);
-    const msg = `🎉 *Bem-vindo ao Shark Money!*
+    const msg = `🎉 *Bem-vindo ao Abio!*
 
 Seu assistente financeiro pelo WhatsApp já está pronto.
 

@@ -94,7 +94,7 @@ async function handle(request: Request) {
       ? `\n\nParcela: *${Math.min(totalInst, Number((b as any).paid_installments ?? 0) + 1)} de ${totalInst}*\nVencimento: *${String(b.next_due_at).split("-").reverse().join("/")}*`
       : "";
     const text = isThree
-      ? `🔔 *Lembrete Shark Money*\n\nSua conta fixa *${b.title}* no valor de *${BRL(remaining)}* vence em *3 dias*.${instLine}${partialLine}\n\nNão esqueça de se programar.`
+      ? `🔔 *Lembrete Abio*\n\nSua conta fixa *${b.title}* no valor de *${BRL(remaining)}* vence em *3 dias*.${instLine}${partialLine}\n\nNão esqueça de se programar.`
       : `⚠️ *Atenção!*\n\nA conta fixa *${b.title}* de *${BRL(remaining)}* vence *amanhã*.${instLine}${partialLine}`;
 
     const res = await sendWhatsAppText(phone, text);

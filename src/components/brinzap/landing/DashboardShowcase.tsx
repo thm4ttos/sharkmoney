@@ -42,7 +42,7 @@ export function DashboardShowcase() {
               <span className="h-2.5 w-2.5 rounded-full bg-destructive/80" />
               <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.82_0.18_80)]" />
               <span className="h-2.5 w-2.5 rounded-full bg-neon" />
-              <span className="ml-2 text-xs text-muted-foreground truncate">app.Shark Money · central financeira</span>
+              <span className="ml-2 text-xs text-muted-foreground truncate">app.Abio · central financeira</span>
             </div>
 
             <div className="relative p-4 sm:p-6 grid gap-4 lg:grid-cols-3">

@@ -52,7 +52,7 @@ export function Navbar() {
       }`}
     >
       <div className="mx-auto max-w-7xl px-5 sm:px-6 h-16 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-        <Link to="/" className="flex items-center shrink-0" aria-label="Shark Money">
+        <Link to="/" className="flex items-center shrink-0" aria-label="Abio">
           <AppLogo size={40} className="h-9 w-9 sm:h-10 sm:w-10" />
         </Link>
 

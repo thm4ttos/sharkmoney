@@ -7,7 +7,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { listSalary, upsertSalary, deleteSalary } from "@/lib/salary.functions";
 
 export const Route = createFileRoute("/app/salario")({
-  head: () => ({ meta: [{ title: "Salário · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Salário · Abio" }] }),
   component: Page,
 });
 const BRL = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n ?? 0);

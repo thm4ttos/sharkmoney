@@ -87,7 +87,7 @@ function HomePage() {
       recent: (live?.recent ?? []) as Array<any>,
       appointments: (live?.appointments ?? []) as Array<any>,
       rangeLabel: (live?.rangeLabel ?? "Histórico completo") as string,
-      greetingPrefix: (live?.greetingPrefix ?? "desde que começou a usar o Shark Money") as string,
+      greetingPrefix: (live?.greetingPrefix ?? "desde que começou a usar o Abio") as string,
       hasCompare: Boolean(live?.hasCompare),
     };
   }, [live]);

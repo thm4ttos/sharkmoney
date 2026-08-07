@@ -24,27 +24,27 @@ import { LandingI18nProvider, useLandingI18n } from "@/lib/landing-i18n";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Shark Money — Seu Assistente Financeiro e Pessoal no WhatsApp" },
+      { title: "Abio — Seu Assistente Financeiro e Pessoal no WhatsApp" },
       {
         name: "description",
         content:
           "Organize suas finanças, compromissos e lembretes diretamente pelo WhatsApp. Simples, inteligente e sempre com você.",
       },
-      { property: "og:title", content: "Shark Money — Seu Assistente Financeiro e Pessoal no WhatsApp" },
+      { property: "og:title", content: "Abio — Seu Assistente Financeiro e Pessoal no WhatsApp" },
       {
         property: "og:description",
         content:
           "Organize suas finanças, compromissos e lembretes diretamente pelo WhatsApp. Simples, inteligente e sempre com você.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:site_name", content: "Shark Money" },
+      { property: "og:site_name", content: "Abio" },
       { property: "og:url", content: "https://abio.fun" },
       { property: "og:image", content: "https://abio.fun/og-abio.jpg" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
-      { property: "og:image:alt", content: "Shark Money — Seu Assistente Financeiro e Pessoal no WhatsApp" },
+      { property: "og:image:alt", content: "Abio — Seu Assistente Financeiro e Pessoal no WhatsApp" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Shark Money — Seu Assistente Financeiro e Pessoal no WhatsApp" },
+      { name: "twitter:title", content: "Abio — Seu Assistente Financeiro e Pessoal no WhatsApp" },
       {
         name: "twitter:description",
         content:

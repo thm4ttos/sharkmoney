@@ -7,7 +7,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { getReport } from "@/lib/reports.functions";
 
 export const Route = createFileRoute("/app/relatorios")({
-  head: () => ({ meta: [{ title: "Relatórios · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Relatórios · Abio" }] }),
   component: Page,
 });
 const BRL = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n ?? 0);
@@ -34,7 +34,7 @@ function Page() {
     const { default: jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
     const doc = new jsPDF();
-    doc.text(`Relatório Shark Money · ${r.label}`, 14, 16);
+    doc.text(`Relatório Abio · ${r.label}`, 14, 16);
     doc.setFontSize(10);
     doc.text(`Receita: ${BRL(r.income)}   Despesa: ${BRL(r.expense)}   Saldo: ${BRL(r.balance)}`, 14, 24);
     autoTable(doc, {

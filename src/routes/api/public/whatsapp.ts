@@ -11,7 +11,7 @@ const fail = (status: number, msg: string) =>
 
 /**
  * REGRA: NÃO existe mais mensagem automática de "estou lendo/ouvindo/analisando".
- * O Shark Money interpreta primeiro, executa depois e só então responde — uma única
+ * O Abio interpreta primeiro, executa depois e só então responde — uma única
  * mensagem, já com o resultado. Qualquer ACK intermediário está proibido.
  */
 

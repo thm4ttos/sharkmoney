@@ -6,7 +6,7 @@ import { AppLogo } from "@/components/brinzap/AppLogo";
 import { Mail, Phone, ArrowLeft, CheckCircle2, AlertTriangle, RotateCw } from "lucide-react";
 
 export const Route = createFileRoute("/forgot-password")({
-  head: () => ({ meta: [{ title: "Recuperar senha · Shark Money" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Recuperar senha · Abio" }, { name: "robots", content: "noindex" }] }),
   component: ForgotPasswordPage,
 });
 

@@ -6,7 +6,7 @@ import { AlertTriangle, Plus, Trash2, CheckCircle2, X } from "lucide-react";
 import { listDebts, upsertDebt, deleteDebt, togglePaidDebt } from "@/lib/debts.functions";
 
 export const Route = createFileRoute("/app/dividas")({
-  head: () => ({ meta: [{ title: "Dívidas · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Dívidas · Abio" }] }),
   component: Page,
 });
 const BRL = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n ?? 0);

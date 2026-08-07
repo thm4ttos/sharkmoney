@@ -6,7 +6,7 @@ const testimonials = [
     name: "Marina Alves",
     role: "Designer · São Paulo",
     initials: "MA",
-    text: "Eu odiava planilha e nunca durava mais de duas semanas. Com o Shark Money eu só mando uma mensagem e acabou. Faz 5 meses que não perco um gasto.",
+    text: "Eu odiava planilha e nunca durava mais de duas semanas. Com o Abio eu só mando uma mensagem e acabou. Faz 5 meses que não perco um gasto.",
   },
   {
     name: "Rafael Nunes",
@@ -24,7 +24,7 @@ const testimonials = [
     name: "Thiago Prado",
     role: "Dev · Belo Horizonte",
     initials: "TP",
-    text: "Testei uns seis apps. Nenhum tinha a leitura de PDF e áudio que o Shark Money tem. A IA acerta a categoria quase sempre.",
+    text: "Testei uns seis apps. Nenhum tinha a leitura de PDF e áudio que o Abio tem. A IA acerta a categoria quase sempre.",
   },
   {
     name: "Juliana Rocha",

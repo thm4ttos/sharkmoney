@@ -7,7 +7,7 @@ import { Repeat, Plus, Trash2, X, Bell, BellOff, CheckCircle2, AlertTriangle, Wa
 import { listBills, upsertBill, toggleBill, deleteBill, chargeBillNow, registerBillPartialPayment, listBillPayments, reverseBillPayment } from "@/lib/bills.functions";
 
 export const Route = createFileRoute("/app/contas-fixas")({
-  head: () => ({ meta: [{ title: "Contas Fixas · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Contas Fixas · Abio" }] }),
   component: Page,
 });
 

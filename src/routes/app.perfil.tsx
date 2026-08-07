@@ -23,7 +23,7 @@ import { ClickableKpi, TxListPanel, BalancePanel, useKpiPopover } from "@/compon
 import { AvatarEditor } from "@/components/brinzap/AvatarEditor";
 
 export const Route = createFileRoute("/app/perfil")({
-  head: () => ({ meta: [{ title: "Meu Perfil · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Meu Perfil · Abio" }] }),
   component: Page,
 });
 

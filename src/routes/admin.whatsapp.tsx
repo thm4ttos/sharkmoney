@@ -18,7 +18,7 @@ import { listWaTemplates, saveWaTemplate } from "@/lib/wa-templates.functions";
 import { MessageCircle, Save, Trash2, Send, KeyRound, Users, History, CheckCircle2, XCircle, Activity, Smartphone, ArrowDownLeft, ArrowUpRight, Megaphone, Bug, FileText, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/whatsapp")({
-  head: () => ({ meta: [{ title: "WhatsApp · Admin Shark Money" }] }),
+  head: () => ({ meta: [{ title: "WhatsApp · Admin Abio" }] }),
   component: Page,
 });
 

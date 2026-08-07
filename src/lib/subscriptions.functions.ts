@@ -1,4 +1,4 @@
-// Núcleo de Assinaturas — Shark Money (Fase A)
+// Núcleo de Assinaturas — Abio (Fase A)
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";

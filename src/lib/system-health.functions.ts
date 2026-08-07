@@ -1,4 +1,4 @@
-// SERVER-ONLY. Health check de todos os subsistemas do Shark Money.
+// SERVER-ONLY. Health check de todos os subsistemas do Abio.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 

@@ -22,7 +22,7 @@ import {
 import { adminListUsers } from "@/lib/brinzap.functions";
 
 export const Route = createFileRoute("/admin/afiliados")({
-  head: () => ({ meta: [{ title: "Afiliados · Shark Money Admin" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Afiliados · Abio Admin" }, { name: "robots", content: "noindex" }] }),
   component: Page,
 });
 

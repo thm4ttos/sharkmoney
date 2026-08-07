@@ -440,7 +440,7 @@ function ImportPage() {
         <p className="text-xs uppercase tracking-[0.2em] text-primary flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> IA de importação</p>
         <h1 className="font-display text-3xl mt-1">Importar Histórico</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Migre planilhas, PDFs, exportações, prints ou anotações para o Shark Money. A IA interpreta datas, valores, categorias e tudo mais automaticamente.
+          Migre planilhas, PDFs, exportações, prints ou anotações para o Abio. A IA interpreta datas, valores, categorias e tudo mais automaticamente.
         </p>
       </header>
 
@@ -570,7 +570,7 @@ function ImportPage() {
                   <Bot className="h-5 w-5 text-primary-foreground" />
                 </div>
                 <div>
-                  <p className="font-display leading-none">Shark Money IA</p>
+                  <p className="font-display leading-none">Abio IA</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">Assistente de importação</p>
                 </div>
               </div>

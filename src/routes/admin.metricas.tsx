@@ -6,7 +6,7 @@ import { Gauge, RefreshCw, Loader2, AlertTriangle, CheckCircle2, Activity, Users
 import { getAdminDiagnostics } from "@/lib/admin-diagnostics.functions";
 
 export const Route = createFileRoute("/admin/metricas")({
-  head: () => ({ meta: [{ title: "Métricas & Fila · Shark Money Admin" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Métricas & Fila · Abio Admin" }, { name: "robots", content: "noindex" }] }),
   component: Page,
 });
 

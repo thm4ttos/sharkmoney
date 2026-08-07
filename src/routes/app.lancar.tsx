@@ -89,7 +89,7 @@ function QuickAdd() {
         <div className="flex items-center gap-2 text-primary">
           <Mic className="h-4 w-4" /> <h2 className="font-display text-lg">Também aceita áudio</h2>
         </div>
-        <p className="text-sm text-muted-foreground mt-1">Mande um áudio no WhatsApp do Shark Money. A IA transcreve e classifica automaticamente.</p>
+        <p className="text-sm text-muted-foreground mt-1">Mande um áudio no WhatsApp do Abio. A IA transcreve e classifica automaticamente.</p>
       </section>
 
       <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5">

@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth-context";
 import { ShieldCheck, ShieldAlert } from "lucide-react";
 
 export const Route = createFileRoute("/admin/auth-debug")({
-  head: () => ({ meta: [{ title: "Auth Debug · Shark Money Admin" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Auth Debug · Abio Admin" }, { name: "robots", content: "noindex" }] }),
   component: Page,
 });
 

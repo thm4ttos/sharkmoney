@@ -1,5 +1,5 @@
 const faqs = [
-  { q: "Preciso baixar algum app?", a: "Não. O Shark Money funciona dentro do WhatsApp. O dashboard web é só o complemento visual." },
+  { q: "Preciso baixar algum app?", a: "Não. O Abio funciona dentro do WhatsApp. O dashboard web é só o complemento visual." },
   { q: "Como funciona o teste grátis?", a: "Você tem 7 dias com tudo liberado, sem cartão. Depois escolhe o plano que quiser." },
   { q: "Posso enviar áudio?", a: "Sim. A IA transcreve e interpreta áudios em português automaticamente." },
   { q: "Meus dados estão seguros?", a: "Sim. Tudo criptografado em trânsito e em repouso. Você é o dono dos seus dados." },

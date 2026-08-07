@@ -1,4 +1,4 @@
-// Camada única de tratamento de datas do Shark Money.
+// Camada única de tratamento de datas do Abio.
 // Todo o sistema trabalha internamente em UTC (ISO), mas exibe e interpreta
 // as datas no fuso America/Sao_Paulo.
 

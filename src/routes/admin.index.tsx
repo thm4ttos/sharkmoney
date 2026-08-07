@@ -27,7 +27,7 @@ import { KpiCard } from "@/components/brinzap/dashboard/KpiCard";
 import { getExecutiveStats } from "@/lib/admin-executive.functions";
 
 export const Route = createFileRoute("/admin/")({
-  head: () => ({ meta: [{ title: "Dashboard executivo · Shark Money Admin" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Dashboard executivo · Abio Admin" }, { name: "robots", content: "noindex" }] }),
   component: AdminDashboard,
 });
 
@@ -60,7 +60,7 @@ function AdminDashboard() {
           <p className="text-xs uppercase tracking-[0.2em] text-primary">Operação</p>
           <h1 className="font-display text-3xl mt-1">Dashboard executivo</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Pulso da plataforma Shark Money em tempo real.
+            Pulso da plataforma Abio em tempo real.
           </p>
         </div>
         <span className="text-xs text-muted-foreground inline-flex items-center gap-1.5">

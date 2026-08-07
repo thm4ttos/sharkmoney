@@ -8,7 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { PasswordInput } from "@/components/brinzap/PasswordInput";
 
 export const Route = createFileRoute("/admin/login")({
-  head: () => ({ meta: [{ title: "Admin · Login · Shark Money" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Admin · Login · Abio" }, { name: "robots", content: "noindex" }] }),
   component: AdminLogin,
 });
 
@@ -91,7 +91,7 @@ function AdminLogin() {
 
 
           <p className="text-[11px] text-muted-foreground text-center pt-2">
-            Acesso restrito a administradores Shark Money.
+            Acesso restrito a administradores Abio.
           </p>
 
         </form>

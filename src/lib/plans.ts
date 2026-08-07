@@ -1,4 +1,4 @@
-// Fonte única de verdade dos planos comerciais do Shark Money.
+// Fonte única de verdade dos planos comerciais do Abio.
 // Qualquer página, checkout, API ou mensagem DEVE consumir esta configuração.
 
 export type SubscriptionPlanId = "monthly" | "six_months" | "annual";

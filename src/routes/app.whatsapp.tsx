@@ -7,7 +7,7 @@ import { MessageCircle, Mic, Image as ImageIcon, Search, Bot } from "lucide-reac
 import { listMyWhatsappMessages } from "@/lib/brinzap.functions";
 
 export const Route = createFileRoute("/app/whatsapp")({
-  head: () => ({ meta: [{ title: "WhatsApp · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "WhatsApp · Abio" }] }),
   component: Page,
 });
 
@@ -71,7 +71,7 @@ function Page() {
         </div>
         <div>
           <h1 className="font-display text-3xl">Histórico de Conversas</h1>
-          <p className="text-sm text-muted-foreground">Suas mensagens trocadas com o Shark Money pelo WhatsApp.</p>
+          <p className="text-sm text-muted-foreground">Suas mensagens trocadas com o Abio pelo WhatsApp.</p>
         </div>
       </header>
 
@@ -115,7 +115,7 @@ function Page() {
             </div>
             <p className="font-display text-lg">Nenhuma conversa ainda</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-              Envie uma mensagem para o Shark Money pelo WhatsApp para começar.
+              Envie uma mensagem para o Abio pelo WhatsApp para começar.
             </p>
           </div>
         ) : (

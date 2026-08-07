@@ -21,7 +21,7 @@ import { KpiCard } from "@/components/brinzap/dashboard/KpiCard";
 import { getFinanceStats } from "@/lib/admin-finance.functions";
 
 export const Route = createFileRoute("/admin/financeiro")({
-  head: () => ({ meta: [{ title: "Financeiro · Shark Money Admin" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Financeiro · Abio Admin" }, { name: "robots", content: "noindex" }] }),
   component: Page,
 });
 

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
 /**
- * Padrão de formulário mobile-first do Shark Money.
+ * Padrão de formulário mobile-first do Abio.
  * Todos os modais de formulário devem usar estes componentes.
  *
  * - Mobile: bottom sheet, 100% de largura, scroll interno, safe-area.

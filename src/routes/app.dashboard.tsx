@@ -25,7 +25,7 @@ import { useState } from "react";
 
 
 export const Route = createFileRoute("/app/dashboard")({
-  head: () => ({ meta: [{ title: "Central Financeira · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Central Financeira · Abio" }] }),
   component: DashboardPage,
 });
 

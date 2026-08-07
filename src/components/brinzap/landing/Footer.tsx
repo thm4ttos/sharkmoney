@@ -35,7 +35,7 @@ export function Footer() {
       </div>
 
       <div className="mx-auto max-w-7xl mt-10 pt-6 border-t border-border/60 text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Shark Money · Seu Assistente Virtual.
+        © {new Date().getFullYear()} Abio · Seu Assistente Virtual.
       </div>
     </footer>
   );

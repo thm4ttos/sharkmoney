@@ -32,7 +32,7 @@ export function WhatsAppChat() {
         <div className="flex items-center gap-3 px-4 py-3 bg-[oklch(0.22_0.08_295)] border-b border-border">
           <div className="h-9 w-9 rounded-full bg-gradient-brand grid place-items-center text-primary-foreground font-bold">B</div>
           <div className="flex-1">
-            <p className="text-sm font-medium">Shark Money</p>
+            <p className="text-sm font-medium">Abio</p>
             <p className="text-[11px] text-primary">online · respondendo</p>
           </div>
           <span className="h-2 w-2 rounded-full bg-primary animate-pulse-glow" />

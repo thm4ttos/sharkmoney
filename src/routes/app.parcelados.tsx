@@ -7,7 +7,7 @@ import { listInstallments, upsertInstallment, payInstallment, deleteInstallment 
 import { REMINDER_OPTIONS, reminderLabel, formatYMD, installmentDueDate } from "@/lib/installments-dates";
 
 export const Route = createFileRoute("/app/parcelados")({
-  head: () => ({ meta: [{ title: "Compras Parceladas · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Compras Parceladas · Abio" }] }),
   component: Page,
 });
 const BRL = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n ?? 0);

@@ -1,4 +1,4 @@
-// SERVER-ONLY. Dashboard executivo do admin Shark Money.
+// SERVER-ONLY. Dashboard executivo do admin Abio.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 

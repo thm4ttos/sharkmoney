@@ -19,7 +19,7 @@ export function DashboardPreview() {
           <span className="h-2.5 w-2.5 rounded-full bg-destructive/80" />
           <span className="h-2.5 w-2.5 rounded-full bg-[oklch(0.82_0.18_80)]" />
           <span className="h-2.5 w-2.5 rounded-full bg-primary" />
-          <span className="ml-3">app.sharkmoney.com / dashboard</span>
+          <span className="ml-3">abio.fun / dashboard</span>
         </div>
         <span className="text-xs text-muted-foreground">Novembro · 2026</span>
       </div>

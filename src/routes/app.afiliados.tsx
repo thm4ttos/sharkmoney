@@ -9,8 +9,8 @@ import { getMyAffiliateOverview, requestAffiliateAccess, requestPayout, getAffil
 export const Route = createFileRoute("/app/afiliados")({
   head: () => ({
     meta: [
-      { title: "Programa de Afiliados · Shark Money" },
-      { name: "description", content: "Indique o Shark Money, acompanhe cliques, cadastros e receba comissões." },
+      { title: "Programa de Afiliados · Abio" },
+      { name: "description", content: "Indique o Abio, acompanhe cliques, cadastros e receba comissões." },
     ],
   }),
   component: Page,
@@ -326,9 +326,9 @@ function PayoutDialog({ available, error, loading, onClose, onSubmit }: {
 
 function MaterialsSection({ link, code, coupon }: { link: string; code: string; coupon?: string | null }) {
   const messages = useMemo(() => [
-    `Estou usando o *Shark Money* como assistente financeiro no WhatsApp — registra gastos, receitas, contas fixas e lembretes numa conversa. Testa com meu link: ${link}`,
-    `Ei! O Shark Money virou meu financeiro pessoal 🤖💰\nÉ tudo pelo WhatsApp e organiza minhas contas automaticamente.\nExperimenta: ${link}${coupon ? `\nCupom: ${coupon}` : ""}`,
-    `Se você quer controle financeiro sem planilha, o *Shark Money* resolve. Basta mandar mensagem no WhatsApp e ele registra tudo. Comece por aqui: ${link}`,
+    `Estou usando o *Abio* como assistente financeiro no WhatsApp — registra gastos, receitas, contas fixas e lembretes numa conversa. Testa com meu link: ${link}`,
+    `Ei! O Abio virou meu financeiro pessoal 🤖💰\nÉ tudo pelo WhatsApp e organiza minhas contas automaticamente.\nExperimenta: ${link}${coupon ? `\nCupom: ${coupon}` : ""}`,
+    `Se você quer controle financeiro sem planilha, o *Abio* resolve. Basta mandar mensagem no WhatsApp e ele registra tudo. Comece por aqui: ${link}`,
   ], [link, coupon]);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const copy = async (i: number, text: string) => {

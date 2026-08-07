@@ -15,7 +15,7 @@ import {
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, BarChart, Bar } from "recharts";
 
 export const Route = createFileRoute("/app/habitos")({
-  head: () => ({ meta: [{ title: "Rotina & Hábitos · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Rotina & Hábitos · Abio" }] }),
   component: Page,
 });
 

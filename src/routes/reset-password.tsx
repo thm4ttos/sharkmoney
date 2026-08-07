@@ -5,7 +5,7 @@ import { PasswordInput, PasswordStrengthMeter, passwordStrength } from "@/compon
 import { AppLogo } from "@/components/brinzap/AppLogo";
 
 export const Route = createFileRoute("/reset-password")({
-  head: () => ({ meta: [{ title: "Redefinir senha · Shark Money" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Redefinir senha · Abio" }, { name: "robots", content: "noindex" }] }),
   component: ResetPasswordPage,
 });
 

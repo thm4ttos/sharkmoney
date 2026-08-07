@@ -8,7 +8,7 @@ import { AtSign } from "lucide-react";
 import { PasswordInput } from "@/components/brinzap/PasswordInput";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Entrar · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Entrar · Abio" }] }),
   component: LoginPage,
 });
 

@@ -69,7 +69,7 @@ function computePeriod(range: DashboardRange, now: Date, customStart?: string, c
   const today = startOfDay(now);
   switch (range) {
     case "all":
-      return { start: null as Date | null, end: null as Date | null, prevStart: null as Date | null, prevEnd: null as Date | null, label: "Desde o início", greetingPrefix: "desde que começou a usar o Shark Money" };
+      return { start: null as Date | null, end: null as Date | null, prevStart: null as Date | null, prevEnd: null as Date | null, label: "Desde o início", greetingPrefix: "desde que começou a usar o Abio" };
     case "today":
       return { start: today, end: endOfDay(now), prevStart: addDays(today, -1), prevEnd: endOfDay(addDays(today, -1)), label: "Hoje", greetingPrefix: "Hoje" };
     case "yesterday": {

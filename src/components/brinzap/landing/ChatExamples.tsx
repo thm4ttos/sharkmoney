@@ -55,7 +55,7 @@ export function ChatExamples() {
                 </motion.span>
               </div>
 
-              {/* resposta do Shark Money */}
+              {/* resposta do Abio */}
               <div className="flex justify-start">
                 <div className="max-w-[90%] rounded-2xl rounded-bl-sm bg-secondary px-3.5 py-2.5 text-sm">
                   <span className="mr-1.5">{r.emoji}</span>

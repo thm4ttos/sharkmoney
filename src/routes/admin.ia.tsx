@@ -14,7 +14,7 @@ import { adminAiLogs } from "@/lib/ai-logs.functions";
 
 
 export const Route = createFileRoute("/admin/ia")({
-  head: () => ({ meta: [{ title: "Inteligência Artificial · Shark Money Admin" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Inteligência Artificial · Abio Admin" }, { name: "robots", content: "noindex" }] }),
   component: Page,
 });
 
@@ -125,7 +125,7 @@ function Page() {
         <div>
           <h1 className="font-display text-3xl">Inteligência Artificial</h1>
           <p className="text-sm text-muted-foreground">
-            Gerencie a chave OpenAI usada por todas as automações do Shark Money.
+            Gerencie a chave OpenAI usada por todas as automações do Abio.
           </p>
         </div>
       </header>
@@ -134,7 +134,7 @@ function Page() {
         <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-200 p-4 flex gap-3">
           <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
           <p className="text-sm">
-            <b>⚠️ OpenAI não configurada.</b> As automações inteligentes do Shark Money estão desativadas.
+            <b>⚠️ OpenAI não configurada.</b> As automações inteligentes do Abio estão desativadas.
             Cadastre uma chave abaixo para ativar texto, áudio e imagem.
           </p>
         </div>
@@ -448,7 +448,7 @@ function PromptsEditor(props: {
         </div>
         <div>
           <h2 className="font-display text-xl">Prompts &amp; Mensagens</h2>
-          <p className="text-xs text-muted-foreground">Personalize como o Shark Money conversa pelo WhatsApp.</p>
+          <p className="text-xs text-muted-foreground">Personalize como o Abio conversa pelo WhatsApp.</p>
         </div>
       </header>
 
@@ -476,11 +476,11 @@ function PromptsEditor(props: {
 
       <PromptField
         label="Prompt Mestre"
-        hint="Instruções base usadas em todas as conversas. Deixe vazio para usar o padrão do Shark Money."
+        hint="Instruções base usadas em todas as conversas. Deixe vazio para usar o padrão do Abio."
         value={props.masterPrompt}
         onChange={props.setMasterPrompt}
         rows={6}
-        placeholder={'Você é o Shark Money, um assistente financeiro inteligente e amigável...'}
+        placeholder={'Você é o Abio, um assistente financeiro inteligente e amigável...'}
       />
       <PromptField
         label="Mensagem de Boas-vindas"
@@ -488,7 +488,7 @@ function PromptsEditor(props: {
         value={props.welcomeMsg}
         onChange={props.setWelcomeMsg}
         rows={3}
-        placeholder={"Oi! Eu sou o Shark Money, seu assistente financeiro 🚀"}
+        placeholder={"Oi! Eu sou o Abio, seu assistente financeiro 🚀"}
       />
       <PromptField
         label="Mensagem para Não Cadastrados"
@@ -496,7 +496,7 @@ function PromptsEditor(props: {
         value={props.guestMsg}
         onChange={props.setGuestMsg}
         rows={4}
-        placeholder={"Explique o Shark Money com simpatia e convide para criar conta em abio.fun."}
+        placeholder={"Explique o Abio com simpatia e convide para criar conta em abio.fun."}
       />
       <PromptField
         label="Cadastro Concluído"
@@ -606,7 +606,7 @@ function AiTester() {
       <div className="rounded-2xl border border-border bg-background/40 p-3 min-h-[180px] max-h-[360px] overflow-auto space-y-2">
         {chat.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-8">
-            Envie uma mensagem para ver como o Shark Money responderia agora.
+            Envie uma mensagem para ver como o Abio responderia agora.
           </p>
         ) : (
           chat.map((m, i) => (
@@ -630,7 +630,7 @@ function AiTester() {
         {mut.isPending && (
           <div className="flex justify-start">
             <div className="bg-card border border-border rounded-2xl px-3 py-2 text-xs text-muted-foreground inline-flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" /> Shark Money está pensando…
+              <Loader2 className="h-3 w-3 animate-spin" /> Abio está pensando…
             </div>
           </div>
         )}
@@ -641,7 +641,7 @@ function AiTester() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={mode === "guest" ? "Ex.: Como funciona o Shark Money?" : "Ex.: Quanto gastei essa semana?"}
+          placeholder={mode === "guest" ? "Ex.: Como funciona o Abio?" : "Ex.: Quanto gastei essa semana?"}
           className="flex-1 rounded-xl border border-border bg-background/40 px-3 py-2 text-sm"
         />
         <button

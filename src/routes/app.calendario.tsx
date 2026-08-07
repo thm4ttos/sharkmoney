@@ -8,7 +8,7 @@ import { getCalendarMonth } from "@/lib/user-extras.functions";
 import { dayOfMonthSP } from "@/lib/datetime";
 
 export const Route = createFileRoute("/app/calendario")({
-  head: () => ({ meta: [{ title: "Calendário · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Calendário · Abio" }] }),
   component: Page,
 });
 

@@ -31,11 +31,11 @@ export function Comparison() {
         <Reveal className="text-center max-w-2xl mx-auto">
           <span className="text-[11px] uppercase tracking-[0.24em] text-neon">Comparação</span>
           <h2 className="font-display text-3xl sm:text-4xl md:text-5xl mt-3 leading-tight">
-            Shark Money <span className="text-muted-foreground text-2xl md:text-3xl align-middle">vs</span>{" "}
+            Abio <span className="text-muted-foreground text-2xl md:text-3xl align-middle">vs</span>{" "}
             <span className="text-gradient-brand">o resto.</span>
           </h2>
           <p className="text-muted-foreground mt-3 text-base md:text-lg">
-            Planilhas dão trabalho. Apps tradicionais exigem disciplina. O Shark Money só pede uma mensagem.
+            Planilhas dão trabalho. Apps tradicionais exigem disciplina. O Abio só pede uma mensagem.
           </p>
         </Reveal>
 
@@ -43,7 +43,7 @@ export function Comparison() {
           <div className="overflow-hidden rounded-3xl border border-border bg-card/50 backdrop-blur-xl shadow-card">
             <div className="grid grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] items-center gap-2 px-3 sm:px-5 py-4 border-b border-border bg-background/40 text-[11px] sm:text-xs">
               <span className="text-muted-foreground">Recurso</span>
-              <span className="text-center font-display text-sm sm:text-base text-neon">Shark Money</span>
+              <span className="text-center font-display text-sm sm:text-base text-neon">Abio</span>
               <span className="text-center text-muted-foreground">Planilhas</span>
               <span className="text-center text-muted-foreground">Apps</span>
             </div>

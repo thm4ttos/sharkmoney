@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin/onboarding")({
   head: () => ({
-    meta: [{ title: "Onboarding · Shark Money Admin" }, { name: "robots", content: "noindex" }],
+    meta: [{ title: "Onboarding · Abio Admin" }, { name: "robots", content: "noindex" }],
   }),
   component: Page,
 });

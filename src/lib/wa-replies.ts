@@ -1,4 +1,4 @@
-// Banco de respostas humanas variadas do Shark Money.
+// Banco de respostas humanas variadas do Abio.
 // Cada "kind" tem N variantes; pickReply sorteia sem repetir a última usada
 // pelo mesmo contato (persistido em wa_contacts.last_reply_variant).
 
@@ -377,7 +377,7 @@ export const REPLY_BANK = {
     "📅 Daqui a pouco começa seu compromisso.",
     "👀 Não esqueça, está quase na hora.",
     "✨ Organize-se, falta pouco.",
-    "💙 O Shark Money está passando para lembrar você.",
+    "💙 O Abio está passando para lembrar você.",
     "🎯 Hora de começar a se preparar.",
   ],
   reminder_1h: [
@@ -395,14 +395,14 @@ export const REPLY_BANK = {
     "📅 Está quase na hora.",
     "💡 Não deixe passar.",
     "⏰ Seu compromisso começa em instantes.",
-    "💙 O Shark Money está lembrando você.",
+    "💙 O Abio está lembrando você.",
     "🎯 Agora falta bem pouco.",
   ],
   reminder_15m: [
     "⚠️ Último lembrete.",
     "🚀 Está na hora.",
     "👋 Boa sorte!",
-    "💙 O Shark Money está torcendo por você.",
+    "💙 O Abio está torcendo por você.",
     "🎯 Agora é o momento.",
     "📍 Hora de ir.",
     "😊 Tenha um ótimo compromisso!",

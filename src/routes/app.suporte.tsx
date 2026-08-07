@@ -7,12 +7,12 @@ import { useAuthProfile } from "@/hooks/use-auth-profile";
 import { listMyTickets, createTicket } from "@/lib/support.functions";
 
 export const Route = createFileRoute("/app/suporte")({
-  head: () => ({ meta: [{ title: "Suporte · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Suporte · Abio" }] }),
   component: Page,
 });
 
 const FAQ = [
-  { q: "Como começo a usar?", a: "Mande mensagens, áudios ou comprovantes para o WhatsApp do Shark Money. Tudo é registrado automaticamente." },
+  { q: "Como começo a usar?", a: "Mande mensagens, áudios ou comprovantes para o WhatsApp do Abio. Tudo é registrado automaticamente." },
   { q: "Como crio uma meta?", a: "Acesse a aba Metas e clique em Nova meta. Você pode acompanhar pelo gráfico e pelo WhatsApp." },
   { q: "Como funcionam os lembretes?", a: "Cadastre em Lembretes ou diga ‘Consulta amanhã 14h’ no WhatsApp." },
   { q: "Posso exportar relatórios?", a: "Sim. Em Relatórios, escolha o período e baixe em PDF ou Excel." },
@@ -32,7 +32,7 @@ function Page() {
   const [message, setMessage] = useState("");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  const waLink = `https://wa.me/?text=${encodeURIComponent("Olá Shark Money, preciso de ajuda.")}`;
+  const waLink = `https://wa.me/?text=${encodeURIComponent("Olá Abio, preciso de ajuda.")}`;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -55,7 +55,7 @@ function Page() {
 
       <section className="rounded-3xl border border-primary/30 bg-gradient-brand-soft p-5">
         <h2 className="font-display text-lg">Fale conosco no WhatsApp</h2>
-        <p className="text-sm text-muted-foreground mt-1">Resposta rápida pelo canal direto do Shark Money.</p>
+        <p className="text-sm text-muted-foreground mt-1">Resposta rápida pelo canal direto do Abio.</p>
         <a href={waLink} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground px-4 py-2.5 text-sm glow-neon"><MessageCircle className="h-4 w-4" /> Abrir WhatsApp</a>
       </section>
 

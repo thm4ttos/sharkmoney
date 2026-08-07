@@ -95,7 +95,7 @@ export const requestAffiliateAccess = createServerFn({ method: "POST" })
     const { data: profile } = await supabaseAdmin
       .from("profiles").select("name, email").eq("id", userId).maybeSingle();
 
-    const base = slugify(profile?.name ?? profile?.email ?? "Shark Money") || "Shark Money";
+    const base = slugify(profile?.name ?? profile?.email ?? "Abio") || "Abio";
     let code = base;
     for (let i = 0; i < 5; i++) {
       const { data: exists } = await supabaseAdmin
@@ -189,7 +189,7 @@ export const adminPromoteToAffiliate = createServerFn({ method: "POST" })
 
     const { data: profile } = await supabaseAdmin
       .from("profiles").select("name, email").eq("id", data.userId).maybeSingle();
-    const base = slugify(profile?.name ?? profile?.email ?? "Shark Money") || "Shark Money";
+    const base = slugify(profile?.name ?? profile?.email ?? "Abio") || "Abio";
     let code = base;
     for (let i = 0; i < 5; i++) {
       const { data: exists } = await supabaseAdmin

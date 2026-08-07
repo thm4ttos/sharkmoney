@@ -7,7 +7,7 @@ import { Target, Plus, Trash2, Sparkles, Plane, Car, Home, Wallet, Star, X } fro
 import { listGoals, upsertGoal, addToGoal, deleteGoal } from "@/lib/goals.functions";
 
 export const Route = createFileRoute("/app/metas")({
-  head: () => ({ meta: [{ title: "Metas · Shark Money" }] }),
+  head: () => ({ meta: [{ title: "Metas · Abio" }] }),
   component: Page,
 });
 

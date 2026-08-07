@@ -98,8 +98,8 @@ export const getMonthlySummary = createServerFn({ method: "GET" })
     const topCat = c.top[0]?.category;
     const parts: string[] = [];
     if (c.count === 0) parts.push(period === "month"
-      ? `Você ainda não registrou movimentações em ${MONTH_PT[cur.month - 1]}. Mande uma mensagem no WhatsApp e o Shark Money começa a organizar sua vida financeira.`
-      : "Você ainda não registrou movimentações financeiras. Mande uma mensagem no WhatsApp e o Shark Money começa a organizar sua vida financeira.");
+      ? `Você ainda não registrou movimentações em ${MONTH_PT[cur.month - 1]}. Mande uma mensagem no WhatsApp e o Abio começa a organizar sua vida financeira.`
+      : "Você ainda não registrou movimentações financeiras. Mande uma mensagem no WhatsApp e o Abio começa a organizar sua vida financeira.");
     else {
       if (period === "month" && p.expense > 0) parts.push(expensePct <= 0 ? `Neste mês você gastou ${Math.abs(expensePct)}% menos que no mês anterior.` : `Suas despesas subiram ${expensePct}% em relação ao mês anterior.`);
       if (topCat) parts.push(`Seu maior gasto foi ${topCat}.`);

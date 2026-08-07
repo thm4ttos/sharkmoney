@@ -1,4 +1,4 @@
-// SERVER-ONLY. Blindagem V1 do Shark Money — Pilares 1/3/4:
+// SERVER-ONLY. Blindagem V1 do Abio — Pilares 1/3/4:
 // - Índice de confiança da IA + gate de execução (Goal B)
 // - Detecção de anomalia (valor >5x a média da categoria em 60 dias) (Goal C)
 // - Contexto conversacional persistente com TTL de 30 min (Goal D)
@@ -10,9 +10,9 @@
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-// ===== Confiança (Shark Money V2 — "resolva, não pergunte") =====
+// ===== Confiança (Abio V2 — "resolva, não pergunte") =====
 // Regra nº 5 do prompt mestre: acima de ~50% de certeza sobre a intenção,
-// o Shark Money EXECUTA. Confirmação só em ambiguidade real ou anomalia.
+// o Abio EXECUTA. Confirmação só em ambiguidade real ou anomalia.
 // >= HIGH → executa silencioso
 // LOW <= x < HIGH → executa mas registra p/ aprendizado
 // FLOOR <= x < LOW → confirmação simples (SIM/NÃO)

@@ -827,7 +827,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           phone,
           documentUrl: Boolean(documentUrl),
         });
-        const replyText = "📄 Recebi e reconheci seu PDF, mas este WhatsApp ainda não está vinculado à sua conta do Shark Money. Entre no painel, confirme seu número e reenvie o documento para eu registrar com segurança.";
+        const replyText = "📄 Recebi e reconheci seu PDF, mas este WhatsApp ainda não está vinculado à sua conta do Abio. Entre no painel, confirme seu número e reenvie o documento para eu registrar com segurança.";
         const sendResult = await sendWhatsAppText(replyPhone, replyText);
         await supabaseAdmin.from("whatsapp_messages").update({
           ai_intent: "document_unlinked_phone",

@@ -35,7 +35,7 @@ function buildMessage(kind: string, appt: { title: string; scheduled_at: string 
   const d = fmtDateSP(appt.scheduled_at);
   switch (kind) {
     case "3d_before":
-      return `🔔 *Lembrete Shark Money*\n\nFaltam apenas *3 dias* para o seu compromisso:\n\n📌 *${appt.title}*\n📅 ${d} às ${t}`;
+      return `🔔 *Lembrete Abio*\n\nFaltam apenas *3 dias* para o seu compromisso:\n\n📌 *${appt.title}*\n📅 ${d} às ${t}`;
     case "day_09":
       return `📅 *Bom dia!*\n\nHoje você tem um compromisso:\n\n📌 *${appt.title}*\n⏰ ${t}`;
     case "before_4h":

@@ -30,7 +30,7 @@ export function Differentials() {
         <Reveal className="max-w-2xl">
           <span className="text-[11px] uppercase tracking-[0.24em] text-neon">Diferenciais</span>
           <h2 className="font-display text-3xl sm:text-4xl md:text-5xl mt-3 leading-tight">
-            Recursos que <span className="text-gradient-brand">só o Shark Money tem.</span>
+            Recursos que <span className="text-gradient-brand">só o Abio tem.</span>
           </h2>
           <p className="text-muted-foreground mt-3 text-base md:text-lg">
             Uma IA financeira completa, treinada para o jeito brasileiro de falar de dinheiro.

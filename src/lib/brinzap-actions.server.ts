@@ -61,7 +61,7 @@ function appointmentTitlesSimilar(a: string, b: string): boolean {
 }
 
 // Data-only (sem hora) — usada nas confirmações de lançamento pra deixar
-// a mensagem mais limpa (respostas humanizadas do Shark Money v1).
+// a mensagem mais limpa (respostas humanizadas do Abio v1).
 function formatDateOnlyPT(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
@@ -458,7 +458,7 @@ export async function queryBalance(userId: string, rawText?: string): Promise<{ 
 export function openDashboardReply(): { replyText: string } {
   return {
     replyText:
-`📊 Acesse seu painel do Shark Money
+`📊 Acesse seu painel do Abio
 
 Pelo painel você pode acompanhar:
 
@@ -789,7 +789,7 @@ function periodHeaderLabel(since: string | null, until: string | null): string {
 }
 
 /**
- * Resposta consolidada de resumo financeiro (formato oficial do Shark Money):
+ * Resposta consolidada de resumo financeiro (formato oficial do Abio):
  * período, entradas, saídas, resultado do período e saldo atual.
  * Nunca destaca "maior gasto" e nunca devolve apenas lista de lançamentos.
  * mode = "categories" abre todas as categorias; mode = "extract" lista os
@@ -919,7 +919,7 @@ export async function queryAppointments(userId: string): Promise<{ replyText: st
 
 export function helpMessage(name?: string): string {
   const first = (name || "").split(" ")[0];
-  return `👋 ${first ? `Olá ${first}!` : "Olá!"} Sou o *Shark Money* — seu assistente financeiro no WhatsApp.
+  return `👋 ${first ? `Olá ${first}!` : "Olá!"} Sou o *Abio* — seu assistente financeiro no WhatsApp.
 
 Você pode me mandar mensagens como:
 

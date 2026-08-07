@@ -11,7 +11,7 @@ const CATEGORIES = [
   "Empresa e Autônomo", "Outros", "Receita",
 ] as const;
 
-const SYSTEM = `Você é o interpretador MASTER de importação financeira do Shark Money. Recebe conteúdo bruto de qualquer origem (planilha, CSV, TXT, PDF, OFX/QIF, extrato bancário, print/imagem, bloco de notas, exportação de outro app, conversa exportada) e extrai TODAS as movimentações financeiras encontradas, sem exceção e SEM LIMITE de quantidade. Nunca invente lançamentos.
+const SYSTEM = `Você é o interpretador MASTER de importação financeira do Abio. Recebe conteúdo bruto de qualquer origem (planilha, CSV, TXT, PDF, OFX/QIF, extrato bancário, print/imagem, bloco de notas, exportação de outro app, conversa exportada) e extrai TODAS as movimentações financeiras encontradas, sem exceção e SEM LIMITE de quantidade. Nunca invente lançamentos.
 
 Categorias válidas: ${CATEGORIES.join(", ")}.
 
