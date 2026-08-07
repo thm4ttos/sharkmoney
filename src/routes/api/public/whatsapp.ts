@@ -113,34 +113,18 @@ export const Route = createFileRoute("/api/public/whatsapp")({
 
         // Sem ACK: nada é enviado antes da interpretação completa.
 
-        // ===== PROCESSAMENTO SÍNCRONO =====
-        // Este runtime não está entregando um `ctx.waitUntil` utilizável ao
-        // handler (o Worker encerra a execução assim que a Response é
-        // enviada, matando qualquer tarefa "em background" antes dela
-        // terminar). Para não depender desse mecanismo, processamos a
-        // mensagem por completo ANTES de responder ao webhook da Z-API.
-        await supabaseAdmin.from("whatsapp_messages")
-          .update({ status: "processing", processing_started_at: new Date().toISOString() })
-          .eq("id", logRow!.id);
-
-        try {
-          const { processInboundMessage } = await import("@/lib/wa-processor.server");
-          await processInboundMessage(logRow!.id);
-        } catch (e: any) {
-          console.error("[wa-webhook] processor crashed", e);
-          try {
-            const { sendWhatsAppText } = await import("@/lib/uazapi.server");
-            await sendWhatsAppText(
-              replyPhone,
-              "⚠️ Ocorreu um erro ao processar sua mensagem. Vou tentar novamente automaticamente.",
-            );
-          } catch {}
-          await supabaseAdmin.from("whatsapp_messages")
-            .update({ status: "error", last_error: (e?.message ?? "processor_error").slice(0, 500) })
-            .eq("id", logRow!.id);
-        }
-
-        return ok({ accepted: true, id: logRow!.id });
+        // ===== ENFILEIRADO — processamento fica por conta do watchdog =====
+        // Este runtime não entrega um `ctx.waitUntil` utilizável ao handler
+        // (o Worker mata qualquer tarefa em segundo plano assim que a
+        // Response é enviada) — confirmado via diagnóstico. Processar de
+        // forma síncrona também não é viável: a Z-API já reenvia a mensagem
+        // se não receber resposta em poucos segundos, bem menos tempo do que
+        // uma classificação com imagem/PDF costuma levar.
+        //
+        // Por isso a mensagem fica "queued" e quem processa de verdade é o
+        // watchdog `/api/public/hooks/wa-reprocess`, chamado via pg_cron a
+        // cada ~30s — sem o prazo apertado do webhook.
+        return ok({ accepted: true, id: logRow!.id, status: "queued" });
       },
     },
   },
