@@ -1105,7 +1105,11 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           .trim()
           .replace(/[.!]+$/, "")
           .replace(/^(e|eh|é|sera|será|vai ser|bora|bora marcar|marca isso|marca|marcar|agenda pra mim|agenda ai|agenda aí|agenda|agendar|anota ai|anota aí|anota|anotar|coloca na agenda|manda pra agenda|mete na agenda|joga no sistema|guarda isso|salva isso|deixa salvo|registra isso|registra|registrar|pode lan[çc]ar|cria|criar|reserva)\s+/i, "")
-          .replace(/(^|\s)(hoje|amanh[ãa]|depois de amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)(-feira)?(?=\s|$)/gi, " ")
+          // "segunda feira" (com espaço) é tão comum quanto "segunda-feira" —
+          // o "[- ]" aceita hífen OU espaço antes de "feira".
+          .replace(/(^|\s)(hoje|amanh[ãa]|depois de amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)([- ]feira)?(?=\s|$)/gi, " ")
+          // Verbos/substantivos de agenda que não são parte do título em si.
+          .replace(/\b(tenho|tem|marcado|marcada|compromisso|lembrete|evento|preciso|vou|quero|me lembra|lembrar)\b/gi, " ")
           .replace(/(^|\s)[àa]s?\s*\d{1,2}([:h]\d{0,2})?(?=\s|$)/gi, " ")
           .replace(/\b\d{1,2}[:h]\d{0,2}\b/gi, " ")
           .replace(/\b\d{1,2}\s*(horas?|h)\b/gi, " ")
