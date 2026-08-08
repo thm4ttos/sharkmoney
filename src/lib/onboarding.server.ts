@@ -324,9 +324,15 @@ async function persistFinancialAnswers(userId: string, answers: any) {
       } as any);
     } catch { /* ignora */ }
   }
-  // Atualiza perfil com nome (se mudou) e preferências
+  // Atualiza perfil com nome, renda/dia de recebimento/profissão/objetivo
+  // coletados no onboarding — antes ficavam só no JSON de progresso e não
+  // podiam ser consultados/editados depois pela conversa.
   const update: any = {};
   if (answers.name) update.name = answers.name;
+  if (typeof answers.income === "number" && answers.income > 0) update.monthly_income = answers.income;
+  if (answers.payday) update.payday = answers.payday;
+  if (answers.profession) update.profession = answers.profession;
+  if (answers.goal) update.financial_goal = answers.goal;
   if (Object.keys(update).length) {
     try { await supabaseAdmin.from("profiles").update(update).eq("id", userId); } catch { /* */ }
   }

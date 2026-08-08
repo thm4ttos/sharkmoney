@@ -2521,7 +2521,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         "correction","reset_data",
         "query_balance","query_summary","query_finance_report","query_appointments",
         "query_bills","query_installments","query_debts","query_goals","query_habits",
-        "query_transactions","query_help","open_dashboard",
+        "query_transactions","query_profile","update_profile","query_help","open_dashboard",
         "confirm_yes","confirm_no","financial_validation_error",
       ]);
       if (intent && !imageUrl && !REGISTRABLE.has(intent.kind)) {
@@ -2887,6 +2887,18 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
         case "query_goals": replyText = (await actions.queryGoals(profile.id)).replyText; break;
         case "query_habits": replyText = (await actions.queryHabits(profile.id)).replyText; break;
         case "query_transactions": replyText = (await actions.queryTransactions(profile.id, { kind: intent.txKind, limit: 15 })).replyText; break;
+        case "query_profile": {
+          const { queryProfileField } = await import("@/lib/profile-info.server");
+          replyText = (await queryProfileField(profile.id, intent.profile_field ?? "income")).replyText;
+          break;
+        }
+        case "update_profile": {
+          const { updateProfileField } = await import("@/lib/profile-info.server");
+          const field = intent.profile_field ?? "income";
+          const value = field === "income" ? Number(intent.profile_value) : (intent.profile_value ?? "");
+          replyText = (await updateProfileField(profile.id, field, value)).replyText;
+          break;
+        }
         case "query_help": replyText = actions.helpMessage(profile.name ?? undefined); break;
         case "open_dashboard": replyText = actions.openDashboardReply().replyText; break;
         case "reset_data":

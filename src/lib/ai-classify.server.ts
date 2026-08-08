@@ -31,6 +31,8 @@ export type IntentKind =
   | "query_goals"
   | "query_habits"
   | "query_transactions"
+  | "query_profile"
+  | "update_profile"
   | "query_help"
   | "open_dashboard"
   | "reset_data"
@@ -62,6 +64,8 @@ export type ClassifyItem = {
   new_description?: string;
   new_payment_method?: string;
   match_hint?: string;
+  profile_field?: "income" | "payday" | "profession" | "goal";
+  profile_value?: string;
 };
 
 export type ClassifyResult = ClassifyItem & {
@@ -204,6 +208,7 @@ const TOOL = {
           "query_balance", "query_summary", "query_appointments",
           "query_bills", "query_installments", "query_debts",
           "query_goals", "query_habits", "query_transactions",
+          "query_profile", "update_profile",
           "query_help", "open_dashboard",
           "reset_data",
           "clarify",
@@ -224,6 +229,8 @@ const TOOL = {
         new_description: { type: "string" },
         new_payment_method: { type: "string", description: "Forma de pagamento atualizada: cartão, débito, crédito, pix, dinheiro, boleto, transferência." },
         match_hint: { type: "string", description: "Pista para localizar o lançamento sendo corrigido (categoria, descrição, valor antigo)." },
+        profile_field: { type: "string", enum: ["income", "payday", "profession", "goal"], description: "Qual dado de PERFIL (cadastrado no onboarding) a pergunta/atualização se refere: income=renda mensal, payday=dia/frequência que recebe, profession=profissão, goal=objetivo financeiro." },
+        profile_value: { type: "string", description: "Quando kind=update_profile: o novo valor em texto. Para profile_field=income, um número em reais (ex.: '20000'); a normalização de 'mil'/'k' já foi feita antes de chegar aqui." },
         confidence: { type: "number", description: "Confiança da classificação entre 0 e 1. Use 0.95+ apenas quando a intenção, o valor e a categoria estiverem inequívocos. Use 0.80-0.94 quando houver ambiguidade leve (categoria dúbia, valor implícito, descrição vaga). Use <0.80 quando faltar informação crítica (sem valor claro, verbo ambíguo, mensagem incompleta). Consultas e respostas de confirmação (sim/não) sempre 1." },
         items: {
           type: "array",
@@ -280,6 +287,8 @@ Consultas/comandos:
 - query_goals: metas financeiras ("minhas metas", "metas cadastradas").
 - query_habits: hábitos/rotina ("meus hábitos", "minha rotina", "hábitos de hoje").
 - query_transactions: histórico de lançamentos, receitas ou despesas específicas ("minhas receitas", "minhas despesas", "últimos gastos", "histórico").
+- query_profile: pergunta sobre um DADO DE PERFIL que o próprio Abio coletou no onboarding (renda mensal, dia que recebe, profissão, objetivo financeiro) — NUNCA sobre movimentações. "Qual minha renda mensal?", "quanto eu disse que ganho?", "que dia eu recebo?", "qual meu objetivo?", "qual profissão eu cadastrei?" → kind="query_profile" + profile_field. ⚠️ Isso é diferente de "quanto recebi esse mês?" (query_transactions/query_summary — pergunta sobre dinheiro que ENTROU de verdade).
+- update_profile: o usuário está CORRIGINDO ou ATUALIZANDO um dado de perfil (não relatando uma movimentação). Sinais: "minha renda é/está X", "corrige minha renda para X", "na verdade eu ganho X", "atualiza meu salário para X", "não ganho X, ganho Y", "meu objetivo agora é X", "agora recebo todo dia X", "não sou mais [profissão], agora sou [profissão]" → kind="update_profile" + profile_field + profile_value. ⚠️ NUNCA confundir com kind="income": "recebi X hoje/ontem/agora" ou "caiu X na conta" = dinheiro que efetivamente entrou (kind="income", cria receita real). "Minha renda é X" ou "ganho X por mês" (sem verbo de recebimento pontual) = dado de planejamento (kind="update_profile"), NUNCA cria receita nem mexe no saldo.
 - query_help
 - open_dashboard: usuário pediu para acessar sua conta, painel, dashboard, gráficos, histórico, relatórios ou o site do Abio. Exemplos: "quero entrar na minha conta", "como acesso meu painel?", "me manda o link do Abio", "quero ver meus gráficos", "quero abrir meu dashboard", "quero consultar meu saldo no site", "como entro no sistema?", "abrir meu Abio", "qual é o site?".
 - reset_data: "zerar histórico", "apagar tudo"
