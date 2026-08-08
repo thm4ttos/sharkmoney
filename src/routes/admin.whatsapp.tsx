@@ -1,21 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   adminGetZapiCreds,
   adminSaveZapiCreds,
   adminListWaContacts,
-  adminCreateWaContact,
-  adminDeleteWaContact,
-  adminSendBroadcast,
+  adminUploadWaImage,
+  adminCreateWaCampaign,
+  adminGetCampaignStatus,
+  adminListWaCampaigns,
+  adminGetCampaignRecipients,
   adminListWhatsappTimeline,
   adminGetZapiStatus,
   adminGetZapiDevice,
 } from "@/lib/zapi-admin.functions";
 import { adminTestFullFlow } from "@/lib/flow-test.functions";
 import { listWaTemplates, saveWaTemplate } from "@/lib/wa-templates.functions";
-import { MessageCircle, Save, Trash2, Send, KeyRound, Users, History, CheckCircle2, XCircle, Activity, Smartphone, ArrowDownLeft, ArrowUpRight, Megaphone, Bug, FileText, Loader2 } from "lucide-react";
+import { MessageCircle, Save, Send, KeyRound, Users, History, CheckCircle2, XCircle, Activity, Smartphone, ArrowDownLeft, ArrowUpRight, Megaphone, Bug, FileText, Loader2, Image as ImageIcon, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/admin/whatsapp")({
   head: () => ({ meta: [{ title: "WhatsApp · Admin Abio" }] }),
@@ -322,59 +324,30 @@ function Field({ label, value, onChange, mono }: { label: string; value: string;
 }
 
 /* ============ Contatos ============ */
+// Somente leitura: a lista vem direto da base de usuários (profiles) — todo
+// usuário com telefone cadastrado aparece aqui automaticamente, sem precisar
+// recadastrar nada. Nome/telefone sempre refletem o que está no perfil.
 function ContactsCard() {
   const list = useServerFn(adminListWaContacts);
-  const create = useServerFn(adminCreateWaContact);
-  const del = useServerFn(adminDeleteWaContact);
-  const qc = useQueryClient();
-  const { data: contacts = [] } = useQuery({ queryKey: ["wa-contacts"], queryFn: () => list() });
-
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-
-  const add = useMutation({
-    mutationFn: () => create({ data: { name, phone } }),
-    onSuccess: () => {
-      setName(""); setPhone(""); setErr(null);
-      qc.invalidateQueries({ queryKey: ["wa-contacts"] });
-    },
-    onError: (e: any) => setErr(e?.message ?? "Erro"),
-  });
-
-  const remove = useMutation({
-    mutationFn: (id: string) => del({ data: { id } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["wa-contacts"] }),
-  });
+  const { data: contacts = [], isLoading } = useQuery({ queryKey: ["wa-contacts"], queryFn: () => list() });
 
   return (
     <section className="space-y-4 max-w-3xl">
-      <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-3">
-        <h2 className="font-display text-lg">Novo contato</h2>
-        <p className="text-xs text-muted-foreground">Formato do telefone: <b>DDI 55 + DDD + número</b>. Ex.: <code>5511987654321</code>. Pode digitar só DDD + número que normalizamos para BR.</p>
-        <div className="grid sm:grid-cols-[1fr_240px_auto] gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" className="rounded-xl border border-border bg-background/40 px-3 py-2 text-sm" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="55 11 98765-4321" className="rounded-xl border border-border bg-background/40 px-3 py-2 text-sm font-mono" />
-          <button onClick={() => add.mutate()} disabled={add.isPending || !phone} className="rounded-xl bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50">
-            Adicionar
-          </button>
-        </div>
-        {err && <p className="text-xs text-destructive">{err}</p>}
-      </div>
-
       <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5">
         <h2 className="font-display text-lg">Contatos ({contacts.length})</h2>
+        <p className="text-xs text-muted-foreground mt-1">
+          Sincronizado automaticamente com os usuários cadastrados no Abio que possuem WhatsApp. Não é preciso cadastrar contato aqui.
+        </p>
         <div className="mt-3 divide-y divide-border">
-          {contacts.length === 0 && <p className="text-sm text-muted-foreground py-4">Nenhum contato ainda.</p>}
+          {isLoading && <p className="text-sm text-muted-foreground py-4">Carregando…</p>}
+          {!isLoading && contacts.length === 0 && <p className="text-sm text-muted-foreground py-4">Nenhum usuário com telefone cadastrado ainda.</p>}
           {contacts.map((c: any) => (
             <div key={c.id} className="flex items-center justify-between py-3">
               <div>
-                <p className="text-sm font-medium">{c.name || "(sem nome)"}</p>
+                <p className="text-sm font-medium">{c.name || "Sem nome no perfil"}</p>
                 <p className="text-xs text-muted-foreground font-mono">{c.phone}</p>
               </div>
-              <button onClick={() => remove.mutate(c.id)} className="rounded-lg border border-border p-2 hover:border-destructive/40 hover:text-destructive">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {c.blocked && <span className="text-[10px] rounded-full border border-destructive/40 text-destructive px-2 py-0.5">bloqueado</span>}
             </div>
           ))}
         </div>
@@ -384,19 +357,35 @@ function ContactsCard() {
 }
 
 /* ============ Enviar ============ */
+function normalizeExtraPhone(v: string): string {
+  const digits = v.replace(/\D/g, "").replace(/^0+/, "");
+  if ((digits.length === 10 || digits.length === 11) && !digits.startsWith("55")) return `55${digits}`;
+  return digits;
+}
+
 function SendCard() {
   const list = useServerFn(adminListWaContacts);
-  const send = useServerFn(adminSendBroadcast);
+  const upload = useServerFn(adminUploadWaImage);
+  const createCampaign = useServerFn(adminCreateWaCampaign);
+  const getStatus = useServerFn(adminGetCampaignStatus);
+  const getRecipients = useServerFn(adminGetCampaignRecipients);
   const qc = useQueryClient();
   const { data: contacts = [] } = useQuery({ queryKey: ["wa-contacts"], queryFn: () => list() });
 
   const [kind, setKind] = useState<"text" | "image">("text");
   const [message, setMessage] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [extraPhones, setExtraPhones] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [sending, setSending] = useState(false); // trava local imediata — evita duplo clique antes da resposta do servidor
+  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [showFailed, setShowFailed] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const contactsByPhone = useMemo(() => new Map(contacts.map((c: any) => [c.phone, c])), [contacts]);
 
   const toggle = (phone: string) => {
     setSelected((s) => {
@@ -405,26 +394,96 @@ function SendCard() {
       return n;
     });
   };
-  const toggleAll = () => {
-    if (selected.size === contacts.length) setSelected(new Set());
-    else setSelected(new Set(contacts.map((c: any) => c.phone)));
-  };
+  const allOn = contacts.length > 0 && selected.size === contacts.length;
+  const toggleAll = () => setSelected(allOn ? new Set() : new Set(contacts.map((c: any) => c.phone)));
 
-  const phones = useMemo(() => {
-    const extra = extraPhones.split(/[\s,;\n]+/).map((p) => p.trim()).filter(Boolean);
-    return Array.from(new Set([...selected, ...extra]));
-  }, [selected, extraPhones]);
+  const extraList = useMemo(
+    () => Array.from(new Set(extraPhones.split(/[\s,;\n]+/).map(normalizeExtraPhone).filter((p) => p.length >= 12 && p.length <= 13))),
+    [extraPhones],
+  );
 
-  const mutation = useMutation({
-    mutationFn: () => send({ data: { phones, kind, message, image_url: imageUrl || undefined, caption } as any }),
-    onSuccess: (r) => {
-      setResult(r);
-      qc.invalidateQueries({ queryKey: ["wa-broadcasts"] });
-    },
-    onError: (e: any) => setResult({ error: e?.message ?? "Erro" }),
+  // Contato selecionado + número extra igual → conta só uma vez.
+  const recipients = useMemo(() => {
+    const byPhone = new Map<string, { phone: string; user_id?: string; name?: string }>();
+    for (const phone of selected) {
+      const c: any = contactsByPhone.get(phone);
+      byPhone.set(phone, { phone, user_id: c?.user_id, name: c?.name ?? undefined });
+    }
+    for (const phone of extraList) {
+      if (!byPhone.has(phone)) byPhone.set(phone, { phone });
+    }
+    return [...byPhone.values()];
+  }, [selected, extraList, contactsByPhone]);
+
+  const statusQuery = useQuery({
+    queryKey: ["wa-campaign-status", campaignId],
+    queryFn: () => getStatus({ data: { campaignId: campaignId! } }),
+    enabled: !!campaignId,
+    refetchInterval: (q) => (q.state.data?.status === "done" ? false : 2000),
   });
 
-  const canSend = phones.length > 0 && ((kind === "text" && message.trim()) || (kind === "image" && imageUrl.trim()));
+  const recipientsQuery = useQuery({
+    queryKey: ["wa-campaign-recipients", campaignId],
+    queryFn: () => getRecipients({ data: { campaignId: campaignId! } }),
+    enabled: !!campaignId && showFailed,
+  });
+
+  const onPickFile = async (file: File) => {
+    setUploadErr(null);
+    setUploading(true);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result as string);
+        r.onerror = () => reject(new Error("Falha ao ler o arquivo."));
+        r.readAsDataURL(file);
+      });
+      const res = await upload({ data: { fileName: file.name, dataUrl } });
+      setImageUrl(res.url);
+    } catch (e: any) {
+      setUploadErr(e?.message ?? "Falha ao enviar imagem.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const send = async () => {
+    if (sending) return; // idempotência do lado do cliente: ignora cliques repetidos
+    setSending(true);
+    setCampaignId(null);
+    setShowFailed(false);
+    try {
+      const res = await createCampaign({
+        data: {
+          kind,
+          message: kind === "text" ? message : undefined,
+          image_url: kind === "image" ? imageUrl : undefined,
+          caption: kind === "image" ? caption : undefined,
+          recipients,
+        } as any,
+      });
+      setCampaignId(res.campaignId);
+      qc.invalidateQueries({ queryKey: ["wa-campaigns-history"] });
+    } catch (e: any) {
+      setCampaignId(null);
+      alert(e?.message ?? "Erro ao criar disparo.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const canSend = recipients.length > 0 && !uploading &&
+    ((kind === "text" && message.trim().length > 0) || (kind === "image" && imageUrl.trim().length > 0));
+
+  const btnLabel = () => {
+    if (sending) return "Criando disparo…";
+    if (recipients.length === 0) return "Selecione ao menos 1 contato";
+    if (allOn && extraList.length === 0) return `Enviar para todos os ${recipients.length} contatos`;
+    return recipients.length === 1 ? "Enviar para 1 contato" : `Enviar para ${recipients.length} contatos`;
+  };
+
+  const s = statusQuery.data;
+  const done = s?.status === "done";
 
   return (
     <section className="grid lg:grid-cols-[1fr_360px] gap-4">
@@ -454,11 +513,22 @@ function SendCard() {
         ) : (
           <div className="space-y-2">
             <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://… (URL pública da imagem)"
-              className="w-full rounded-xl border border-border bg-background/40 px-3 py-2 text-sm font-mono"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) onPickFile(f); }}
             />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="w-full rounded-xl border border-dashed border-border bg-background/40 px-3 py-6 text-sm text-muted-foreground hover:border-primary/40 transition-smooth inline-flex flex-col items-center gap-2 disabled:opacity-50"
+            >
+              <ImageIcon className="h-5 w-5" />
+              {uploading ? "Enviando imagem…" : imageUrl ? "Trocar imagem" : "Clique para escolher uma imagem"}
+            </button>
+            {uploadErr && <p className="text-xs text-destructive">{uploadErr}</p>}
+            {imageUrl && <img src={imageUrl} alt="" className="max-h-48 rounded-xl border border-border" />}
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
@@ -466,12 +536,12 @@ function SendCard() {
               placeholder="Legenda (opcional)"
               className="w-full rounded-xl border border-border bg-background/40 px-3 py-2 text-sm"
             />
-            {imageUrl && <img src={imageUrl} alt="" className="max-h-48 rounded-xl border border-border" />}
           </div>
         )}
 
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Números extras (opcional)</p>
+          <p className="text-[11px] text-muted-foreground mb-1">Não viram usuários cadastrados — só recebem esse disparo pontual.</p>
           <textarea
             value={extraPhones}
             onChange={(e) => setExtraPhones(e.target.value)}
@@ -483,45 +553,73 @@ function SendCard() {
 
         <div className="flex items-center gap-3 pt-1">
           <button
-            onClick={() => mutation.mutate()}
-            disabled={!canSend || mutation.isPending}
+            onClick={send}
+            disabled={!canSend || sending}
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
-            <Send className="h-4 w-4" />
-            {mutation.isPending ? "Enviando…" : `Enviar para ${phones.length} contato(s)`}
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {btnLabel()}
           </button>
         </div>
 
-        {result && (
-          <div className="rounded-xl border border-border bg-background/40 p-3 text-xs space-y-1 max-h-56 overflow-auto">
-            {result.error && <p className="text-destructive">{result.error}</p>}
-            {result.results?.map((r: any, i: number) => (
-              <div key={i} className="flex items-center gap-2">
-                {r.ok ? <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> : <XCircle className="h-3.5 w-3.5 text-destructive" />}
-                <span className="font-mono">{r.phone}</span>
-                {r.error && <span className="text-destructive truncate">— {r.error}</span>}
+        {campaignId && s && (
+          <div className="rounded-xl border border-border bg-background/40 p-4 text-sm space-y-2">
+            {!done ? (
+              <p className="inline-flex items-center gap-2 text-primary"><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</p>
+            ) : (
+              <p className="inline-flex items-center gap-2 text-primary"><CheckCircle2 className="h-4 w-4" /> Disparo concluído</p>
+            )}
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="rounded-lg border border-border bg-card/60 p-2 text-center">
+                <p className="text-muted-foreground">Enviados</p>
+                <p className="font-display text-lg text-primary">{s.sent_count}</p>
               </div>
-            ))}
+              <div className="rounded-lg border border-border bg-card/60 p-2 text-center">
+                <p className="text-muted-foreground">Pendentes</p>
+                <p className="font-display text-lg">{s.pending}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card/60 p-2 text-center">
+                <p className="text-muted-foreground">Falharam</p>
+                <p className="font-display text-lg text-destructive">{s.failed_count}</p>
+              </div>
+            </div>
+            {s.failed_count > 0 && (
+              <button onClick={() => setShowFailed((v) => !v)} className="text-xs text-primary hover:underline">
+                {showFailed ? "Ocultar erros" : "Ver erros"}
+              </button>
+            )}
+            {showFailed && (
+              <div className="max-h-40 overflow-auto space-y-1">
+                {(recipientsQuery.data ?? []).filter((r: any) => r.status === "failed").map((r: any) => (
+                  <div key={r.id} className="text-xs flex items-center gap-2">
+                    <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                    <span className="font-mono">{r.phone}</span>
+                    <span className="text-destructive truncate">— {r.error}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
       <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <h2 className="font-display text-lg">Contatos</h2>
           <button onClick={toggleAll} className="text-xs text-primary">
-            {selected.size === contacts.length && contacts.length > 0 ? "Limpar" : "Todos"}
+            {allOn ? "Limpar" : "Selecionar todos"}
           </button>
         </div>
+        <p className="text-xs text-muted-foreground mb-3">{recipients.length} contato(s) selecionado(s)</p>
         <div className="space-y-1 max-h-[480px] overflow-auto">
-          {contacts.length === 0 && <p className="text-sm text-muted-foreground">Cadastre contatos na aba "Contatos".</p>}
+          {contacts.length === 0 && <p className="text-sm text-muted-foreground">Nenhum usuário com telefone cadastrado ainda.</p>}
           {contacts.map((c: any) => {
             const on = selected.has(c.phone);
             return (
               <label key={c.id} className={["flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-smooth", on ? "border-primary/40 bg-primary/10" : "border-border bg-background/30"].join(" ")}>
                 <input type="checkbox" checked={on} onChange={() => toggle(c.phone)} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate">{c.name || "(sem nome)"}</p>
+                  <p className="truncate">{c.name || "Sem nome no perfil"}</p>
                   <p className="text-[11px] text-muted-foreground font-mono">{c.phone}</p>
                 </div>
               </label>
@@ -534,21 +632,79 @@ function SendCard() {
 }
 
 /* ============ Histórico ============ */
+function CampaignsHistory() {
+  const list = useServerFn(adminListWaCampaigns);
+  const getRecipients = useServerFn(adminGetCampaignRecipients);
+  const { data: campaigns = [] } = useQuery({ queryKey: ["wa-campaigns-history"], queryFn: () => list(), refetchInterval: 5000 });
+  const [openId, setOpenId] = useState<string | null>(null);
+  const { data: recipients = [] } = useQuery({
+    queryKey: ["wa-campaign-recipients-detail", openId],
+    queryFn: () => getRecipients({ data: { campaignId: openId! } }),
+    enabled: !!openId,
+  });
+
+  return (
+    <div className="divide-y divide-border">
+      {campaigns.length === 0 && <p className="text-sm text-muted-foreground py-4">Nenhum disparo em massa ainda.</p>}
+      {campaigns.map((c: any) => {
+        const open = openId === c.id;
+        return (
+          <div key={c.id} className="py-3 text-sm">
+            <button onClick={() => setOpenId(open ? null : c.id)} className="w-full text-left">
+              <div className="flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-1">
+                <span className="inline-flex items-center gap-2">
+                  <Megaphone className="h-3.5 w-3.5 text-primary" />
+                  <span>{c.kind === "image" ? "Imagem" : "Texto"}</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] border border-border ${c.status === "done" ? "" : "text-primary border-primary/40"}`}>
+                    {c.status === "done" ? "concluído" : c.status === "processing" ? "enviando" : "na fila"}
+                  </span>
+                </span>
+                <span>{new Date(c.created_at).toLocaleString("pt-BR")}</span>
+              </div>
+              <p className="mt-1 truncate">{c.message || c.caption || <span className="text-muted-foreground">(sem legenda)</span>}</p>
+              <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span>{c.total_recipients} destinatário(s)</span>
+                <span className="text-primary">{c.sent_count} enviados</span>
+                {c.failed_count > 0 && <span className="text-destructive">{c.failed_count} falharam</span>}
+                {c.pending > 0 && <span>{c.pending} pendentes</span>}
+              </div>
+            </button>
+            {open && (
+              <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-border bg-background/40 p-2 space-y-1">
+                {recipients.map((r: any) => (
+                  <div key={r.id} className="flex items-center gap-2 text-xs">
+                    {r.status === "sent" ? <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" /> : r.status === "failed" ? <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" /> : <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                    <span className="font-mono">{r.phone}</span>
+                    {r.name && <span className="text-muted-foreground truncate">{r.name}</span>}
+                    {r.error && <span className="text-destructive truncate">— {r.error}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function HistoryCard() {
   const list = useServerFn(adminListWhatsappTimeline);
   const { data = [] } = useQuery({ queryKey: ["wa-timeline"], queryFn: () => list(), refetchInterval: 5000 });
-  const [filter, setFilter] = useState<"all" | "broadcast" | "in" | "out" | "error">("all");
+  const [filter, setFilter] = useState<"campanhas" | "all" | "broadcast" | "in" | "out" | "error">("campanhas");
   const [openId, setOpenId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (filter === "all") return data;
     if (filter === "error") return data.filter((i: any) => i.error || i.status === "error" || i.status?.endsWith("_error"));
+    if (filter === "campanhas") return [];
     return data.filter((i: any) => i.kind === filter);
   }, [data, filter]);
 
   const tabs = [
+    { id: "campanhas", label: "Campanhas", icon: Megaphone },
     { id: "all", label: "Todos", icon: History },
-    { id: "broadcast", label: "Disparos", icon: Megaphone },
+    { id: "broadcast", label: "Disparos (legado)", icon: Megaphone },
     { id: "in", label: "Recebidos", icon: ArrowDownLeft },
     { id: "out", label: "Respostas bot", icon: ArrowUpRight },
     { id: "error", label: "Com erro", icon: XCircle },
@@ -557,7 +713,7 @@ function HistoryCard() {
   return (
     <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="font-display text-lg">Timeline ({filtered.length})</h2>
+        <h2 className="font-display text-lg">{filter === "campanhas" ? "Campanhas" : `Timeline (${filtered.length})`}</h2>
         <div className="flex flex-wrap gap-1.5">
           {tabs.map((t) => {
             const Icon = t.icon;
@@ -574,37 +730,42 @@ function HistoryCard() {
           })}
         </div>
       </div>
-      <div className="divide-y divide-border">
-        {filtered.length === 0 && <p className="text-sm text-muted-foreground py-4">Nada por aqui.</p>}
-        {filtered.map((i: any) => {
-          const isError = i.error || i.status === "error" || i.status?.endsWith("_error");
-          const Icon = i.kind === "broadcast" ? Megaphone : i.kind === "in" ? ArrowDownLeft : ArrowUpRight;
-          const color = isError ? "text-destructive" : i.kind === "in" ? "text-primary" : i.kind === "out" ? "text-emerald-400" : "text-amber-400";
-          const open = openId === i.id;
-          return (
-            <div key={i.id} className="py-2.5 text-sm">
-              <button onClick={() => setOpenId(open ? null : i.id)} className="w-full text-left">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-2">
-                    <Icon className={`h-3.5 w-3.5 ${color}`} />
-                    <span className="font-mono">{i.phone}</span>
-                    <span>· {i.media}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] border border-border ${isError ? "text-destructive" : ""}`}>{i.status}</span>
-                  </span>
-                  <span>{new Date(i.when).toLocaleString("pt-BR")}</span>
-                </div>
-                <p className="mt-1 truncate">{i.content || <span className="text-muted-foreground">(sem conteúdo)</span>}</p>
-                {i.error && <p className="text-xs text-destructive mt-0.5">{i.error}</p>}
-              </button>
-              {open && (
-                <pre className="mt-2 max-h-72 overflow-auto rounded-lg border border-border bg-background/40 p-2 text-[10px] font-mono whitespace-pre-wrap break-all">
-                  {JSON.stringify(i.detail, null, 2)}
-                </pre>
-              )}
-            </div>
-          );
-        })}
-      </div>
+
+      {filter === "campanhas" ? (
+        <CampaignsHistory />
+      ) : (
+        <div className="divide-y divide-border">
+          {filtered.length === 0 && <p className="text-sm text-muted-foreground py-4">Nada por aqui.</p>}
+          {filtered.map((i: any) => {
+            const isError = i.error || i.status === "error" || i.status?.endsWith("_error");
+            const Icon = i.kind === "broadcast" ? Megaphone : i.kind === "in" ? ArrowDownLeft : ArrowUpRight;
+            const color = isError ? "text-destructive" : i.kind === "in" ? "text-primary" : i.kind === "out" ? "text-emerald-400" : "text-amber-400";
+            const open = openId === i.id;
+            return (
+              <div key={i.id} className="py-2.5 text-sm">
+                <button onClick={() => setOpenId(open ? null : i.id)} className="w-full text-left">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-2">
+                      <Icon className={`h-3.5 w-3.5 ${color}`} />
+                      <span className="font-mono">{i.phone}</span>
+                      <span>· {i.media}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] border border-border ${isError ? "text-destructive" : ""}`}>{i.status}</span>
+                    </span>
+                    <span>{new Date(i.when).toLocaleString("pt-BR")}</span>
+                  </div>
+                  <p className="mt-1 truncate">{i.content || <span className="text-muted-foreground">(sem conteúdo)</span>}</p>
+                  {i.error && <p className="text-xs text-destructive mt-0.5">{i.error}</p>}
+                </button>
+                {open && (
+                  <pre className="mt-2 max-h-72 overflow-auto rounded-lg border border-border bg-background/40 p-2 text-[10px] font-mono whitespace-pre-wrap break-all">
+                    {JSON.stringify(i.detail, null, 2)}
+                  </pre>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

@@ -149,3 +149,67 @@ export async function sendWhatsAppText(toPhone: string, text: string): Promise<S
     credsSource: creds.source,
   };
 }
+
+export async function sendWhatsAppImage(toPhone: string, imageUrl: string, caption?: string): Promise<SendResult> {
+  const creds = await loadZapiCreds();
+  if (!creds.instanceId || !creds.instanceToken || !creds.clientToken) {
+    const err = `Z-API creds ausentes (source=${creds.source}, hasId=${!!creds.instanceId}, hasToken=${!!creds.instanceToken}, hasClientToken=${!!creds.clientToken})`;
+    console.error("[zapi] " + err);
+    return { ok: false, url: "", error: err, credsSource: creds.source };
+  }
+
+  const url = `https://api.z-api.io/instances/${creds.instanceId}/token/${creds.instanceToken}/send-image`;
+  console.log(`[zapi] send-image → ${toPhone} (creds=${creds.source}, instance=${creds.instanceId})`);
+
+  let lastErr: any = null;
+  let lastStatus: number | undefined;
+  let lastBody: string | undefined;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Client-Token": creds.clientToken },
+        body: JSON.stringify({ phone: toPhone, image: imageUrl, caption: caption ?? "" }),
+      });
+
+      const body = await res.text().catch(() => "");
+      lastStatus = res.status;
+      lastBody = body;
+
+      let json: any = null;
+      try { json = JSON.parse(body); } catch { /* ignore */ }
+
+      if (res.ok) {
+        console.log(`[zapi] send-image OK attempt=${attempt} status=${res.status} resp=${body.slice(0, 200)}`);
+        return { ok: true, status: res.status, url, response: json ?? { raw: body }, credsSource: creds.source };
+      }
+
+      console.error(`[zapi] send-image FAIL attempt=${attempt}/${MAX_ATTEMPTS} status=${res.status} body=${body.slice(0, 300)}`);
+
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, url, response: json ?? { raw: body }, error: "ZAPI_CLIENT_TOKEN_INVALID", credsSource: creds.source };
+      }
+      if (!isRetryableStatus(res.status)) {
+        return { ok: false, status: res.status, url, response: json ?? { raw: body }, error: `ZAPI_SEND_FAILED_${res.status}`, credsSource: creds.source };
+      }
+      lastErr = new Error(`ZAPI_SEND_FAILED_${res.status}`);
+    } catch (err: any) {
+      console.error(`[zapi] send-image NETWORK ERROR attempt=${attempt}/${MAX_ATTEMPTS}:`, err?.message || err);
+      lastErr = err;
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      await sleep(BASE_DELAY_MS * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 200));
+    }
+  }
+
+  return {
+    ok: false,
+    status: lastStatus,
+    url,
+    response: lastBody ? { raw: lastBody } : null,
+    error: lastErr?.message ?? "ZAPI_SEND_FAILED_RETRY_EXHAUSTED",
+    credsSource: creds.source,
+  };
+}
