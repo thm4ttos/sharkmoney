@@ -6,6 +6,16 @@ export async function signup(input: { name: string; phone: string; email: string
   const phone = normalizePhone(input.phone);
   if (phone.length < 10) return { ok: false as const, error: "Celular inválido." };
   if (input.password.length < 6) return { ok: false as const, error: "Senha deve ter ao menos 6 caracteres." };
+
+  const { checkPhoneTaken } = await import("@/lib/signup.functions");
+  try {
+    const { taken } = await checkPhoneTaken({ data: { phone } });
+    if (taken) return { ok: false as const, error: "Já existe um usuário com esse número." };
+  } catch {
+    // Se a checagem falhar por algum motivo, segue o fluxo normal —
+    // o trigger do banco ainda bloqueia duplicidade, só sem essa mensagem amigável.
+  }
+
   let ref: string | null = null;
   let refCampaign: string | null = null;
   try {
@@ -23,7 +33,12 @@ export async function signup(input: { name: string; phone: string; email: string
       data: { name: input.name.trim(), phone, ...(ref ? { ref } : {}), ...(refCampaign ? { ref_campaign: refCampaign } : {}) },
     },
   });
-  if (error) return { ok: false as const, error: error.message };
+  if (error) {
+    const msg = /database error saving new user/i.test(error.message)
+      ? "Já existe um usuário com esse número."
+      : error.message;
+    return { ok: false as const, error: msg };
+  }
   return { ok: true as const };
 }
 
