@@ -116,11 +116,21 @@ export const requestPasswordRecovery = createServerFn({ method: "POST" })
       return { status: "send_failed", error: "Não foi possível gerar o link de recuperação." };
     }
 
+    // Link curto no próprio domínio — o link cru do Supabase é um JWT enorme
+    // que parece spam/phishing quando colado direto numa mensagem de WhatsApp.
+    let linkForMessage = actionLink;
+    try {
+      const { createShortLink } = await import("@/lib/short-link.server");
+      linkForMessage = await createShortLink(actionLink);
+    } catch (e) {
+      console.warn("[recovery] short link failed, using raw link:", (e as any)?.message);
+    }
+
     const message =
       `🔐 *Abio - Recuperação de Senha*\n\n` +
       `Recebemos uma solicitação para redefinir sua senha.\n` +
       `Clique no link abaixo para criar uma nova senha:\n\n` +
-      `${actionLink}\n\n` +
+      `${linkForMessage}\n\n` +
       `Este link é válido por 30 minutos. Se você não fez esta solicitação, ignore esta mensagem.`;
 
     try {
