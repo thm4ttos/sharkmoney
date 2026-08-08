@@ -538,19 +538,27 @@ function SubscriptionEditorModal({
       if (!Number.isFinite(priceCents) || priceCents < 0) throw new Error("Valor inválido");
       const startedAtIso = startedAt ? new Date(startedAt + "T00:00:00").toISOString() : null;
       const endsAtIso = endsAt ? new Date(endsAt + "T23:59:59").toISOString() : null;
+
       if (isCreate) {
         await assign({ data: { userId: user.id, planSlug, adminNote: note || undefined } });
       } else {
-        await update({
-          data: {
-            subscriptionId: sub!.id,
-            planSlug,
-            priceCents,
-            startedAt: startedAtIso,
-            endsAt: endsAtIso,
-            status: status as any,
-          },
-        });
+        const subChanged = planSlug !== sub!.plan_slug
+          || priceCents !== sub!.price_cents
+          || startedAt !== (sub!.started_at ? sub!.started_at.slice(0, 10) : "")
+          || endsAt !== (sub!.ends_at ? sub!.ends_at.slice(0, 10) : "")
+          || status !== sub!.status;
+        if (subChanged) {
+          await update({
+            data: {
+              subscriptionId: sub!.id,
+              planSlug,
+              priceCents,
+              startedAt: startedAtIso,
+              endsAt: endsAtIso,
+              status: status as any,
+            },
+          });
+        }
       }
       onSaved();
     } catch (e: any) {
