@@ -477,16 +477,22 @@ export const adminUpdateUserProfile = createServerFn({ method: "POST" })
     if (phone.length < 12 || phone.length > 13) throw new Error("Telefone inválido. Use DDI 55 + DDD + número.");
 
     if (phone !== normalizePhone(before.phone)) {
-      const { data: dupPhone } = await supabaseAdmin
-        .from("profiles").select("id").in("phone", phoneLookupVariants(phone)).neq("id", data.userId).maybeSingle();
-      if (dupPhone) throw new Error("Este número já está vinculado a outro usuário.");
+      const { data: phoneMatches, error: phoneErr } = await supabaseAdmin
+        .from("profiles").select("id").in("phone", phoneLookupVariants(phone));
+      if (phoneErr) throw new Error(phoneErr.message);
+      if ((phoneMatches ?? []).some((r: any) => r.id !== data.userId)) {
+        throw new Error("Este número já está vinculado a outro usuário.");
+      }
     }
 
     const email = data.email.toLowerCase();
     if (email !== (before.email ?? "").toLowerCase()) {
-      const { data: dupEmail } = await supabaseAdmin
-        .from("profiles").select("id").ilike("email", email).neq("id", data.userId).maybeSingle();
-      if (dupEmail) throw new Error("Este e-mail já está cadastrado.");
+      const { data: emailMatches, error: emailErr } = await supabaseAdmin
+        .from("profiles").select("id").ilike("email", email);
+      if (emailErr) throw new Error(emailErr.message);
+      if ((emailMatches ?? []).some((r: any) => r.id !== data.userId)) {
+        throw new Error("Este e-mail já está cadastrado.");
+      }
       // Mantém o auth.users em sincronia — mesmo user_id, só troca o e-mail de login.
       const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { email });
       if (authErr) {
