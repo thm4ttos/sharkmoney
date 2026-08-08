@@ -252,6 +252,14 @@ Tipos de lançamento individual:
 - appointment: compromisso/lembrete com data/hora ("consulta amanhã 14h", "lembrar dentista terça 9h", "me lembra de pagar o IPVA dia 15 às 9h"). Use scheduled_at ISO 8601 e appointment_title curto.
 - bill: CONTA FIXA RECORRENTE (água, luz, internet, aluguel, academia, streaming, mensalidade). "Todo dia 10 pago academia 120" → bill, title="Academia", amount=120, frequency="monthly", due_day=10. Se não houver dia/data, deixe due_day e next_due_at vazios — o sistema perguntará. ⚠️ Só use kind="bill" quando existir marcador EXPLÍCITO de repetição ("todo mês", "mensal", "toda semana", "conta fixa", "recorrente", "assinatura", "mensalidade") OU o item for claramente recorrente por natureza (aluguel, luz, água, internet, condomínio, academia, streaming, plano de saúde). Mensagens como "anota pagar mãe dia 24", "lembrar do feijão dia 24", "pagar João dia 18" NÃO são conta fixa — são compromissos ÚNICOS (kind="appointment").
 - installment: PARCELAMENTO. "Fórum (9ª de 10) — R$ 70" → title="Fórum", installments_paid=9, installments_total=10, amount=70. Reconheça "(Xª de Y)", "X/Y", "parcela X de Y".
+
+⚠️ PARCELAMENTO/CONSÓRCIO COM MUITAS PARCELAS — NÃO TROCAR OS CAMPOS (erro crítico e comum):
+Em frases como "Pago consórcio 220 parcelas já paguei 1, pago até o dia 15, 337,30" existem TRÊS números com papéis diferentes — nunca troque um pelo outro:
+- "220 parcelas" → installments_total=220 (é uma CONTAGEM, nunca vai em "amount").
+- "já paguei 1" → installments_paid=1 (quantas já foram pagas).
+- "337,30" (o único valor com formato monetário: vírgula/ponto de centavos, ou precedido de R$) → amount=337.30 (SEMPRE o valor de UMA parcela — nunca o total do consórcio, nunca a contagem de parcelas).
+- "até o dia 15" → due_day=15.
+Regra de identificação: o valor monetário (amount) é o número que tem centavos (vírgula/ponto + 2 dígitos) ou vem com "R$"; a quantidade de parcelas é um número inteiro solto antes/depois da palavra "parcela(s)". NUNCA copie o número de parcelas para "amount" nem o valor em reais para "installments_total".
 - debt: DÍVIDA (empréstimo, valor devido a alguém). Use title, principal via amount, creditor opcional.
 - goal: META financeira (formatura, viagem, reserva). Use title, target_amount, target_date opcional.
 
@@ -336,6 +344,7 @@ Regras CRÍTICAS de valor PT-BR:
 - Converta números por extenso: "cinquenta"→50, "duzentos"→200, "mil"→1000, "mil e quinhentos"→1500, "dois mil"→2000.
 - Valores como number em BRL. Fuso America/Sao_Paulo. Agora: ${new Date().toISOString()}.
 - Datas relativas ("amanhã 14h", "sexta 9h", "dia 10") → ISO 8601 absoluto.
+- ⚠️ NUNCA invente ano. Toda data que você gerar (next_due_at, scheduled_at, occurred_at) deve usar o ANO ATUAL (ou o próximo, se o mês/dia já passou neste ano) — jamais um ano anterior ao atual, a não ser que o usuário tenha ESCRITO esse ano explicitamente. Se não conseguir determinar o dia/mês com segurança, deixe o campo de data vazio em vez de adivinhar — o sistema pergunta ao usuário depois.
 
 CONTEXTO: o histórico pode trazer "[última ação: expense R$50 Alimentação 'Mercado']". Use para herdar categoria em mensagens incrementais e para resolver correções.
 

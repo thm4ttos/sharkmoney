@@ -1031,7 +1031,15 @@ Qual é o *dia do vencimento* dessa conta todos os meses? (Ex.: 05, 10, 15, 30)`
     };
   }
 
-  const dueDate = nextDue || nextDueFromDay(5);
+  // nextDueFromDay() é "dia do MÊS" — não faz sentido como fallback pra conta
+  // semanal/quinzenal sem data informada (ex.: "aluguel do carro 600 toda
+  // semana", sem dia definido). Nesses casos, ancora em hoje + 1 ciclo.
+  const dueDate = nextDue || (
+    frequency === "weekly" ? new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10)
+    : frequency === "biweekly" ? new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10)
+    : frequency === "yearly" ? new Date(Date.now() + 365 * 86400_000).toISOString().slice(0, 10)
+    : nextDueFromDay(5)
+  );
   const total = Number(input.total_installments);
   const hasTotal = Number.isFinite(total) && total >= 2;
   const paidCount = hasTotal ? Math.max(0, Math.min(total, Number(input.paid_installments ?? 0) || 0)) : 0;
