@@ -101,13 +101,17 @@ export function parseFutureDateTimeSP(text: string, base = new Date()): FutureDa
   }
 
   // --- Dia da semana (sempre a PRÓXIMA ocorrência) ---
+  // Quando o dia citado é HOJE (diff=0), não pula direto pra semana que vem —
+  // fica em aberto até checar o horário (abaixo): se ainda não passou, é hoje
+  // mesmo; se já passou, aí sim vai pra próxima ocorrência (+7).
+  let weekdayIsToday = false;
   if (!hasDate) {
     const wd = norm.match(/\b(?:na\s+|no\s+|essa\s+|esta\s+|proxima\s+|proximo\s+)?(domingo|segunda(?:-feira)?|terca(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|sabado)\b/);
     if (wd) {
       const target = WEEKDAYS[wd[1].replace("-feira", "")];
       let diff = target - todayWd;
-      if (diff <= 0) diff += 7;
-      if (/\bproxim/.test(norm) && diff < 7) diff += 0;
+      if (diff < 0) diff += 7;
+      if (diff === 0) weekdayIsToday = true;
       date = addDays(today.y, today.m, today.d, diff); hasDate = true;
     }
   }
@@ -170,6 +174,15 @@ export function parseFutureDateTimeSP(text: string, base = new Date()): FutureDa
 
   const hasTime = hh !== null;
   if (!hasDate && !hasTime) return { iso: null, hasDate: false, hasTime: false };
+
+  if (weekdayIsToday && hasTime) {
+    // Dia citado é HOJE: só fica em hoje se o horário ainda não passou.
+    const nowH = Number(new Intl.DateTimeFormat("pt-BR", { timeZone: SP_TZ, hour: "2-digit", hour12: false }).format(base));
+    const nowM = Number(new Intl.DateTimeFormat("pt-BR", { timeZone: SP_TZ, minute: "2-digit" }).format(base));
+    if ((hh! * 60 + mm) <= (nowH * 60 + nowM)) {
+      date = addDays(today.y, today.m, today.d, 7);
+    }
+  }
 
   if (!hasDate) {
     // Só hora: hoje, ou amanhã se já passou.

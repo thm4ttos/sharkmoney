@@ -351,7 +351,8 @@ Regras CRÍTICAS de valor PT-BR:
 - Só divida em vários lançamentos quando houver DESCRIÇÕES diferentes com valores próprios ("37 no sorvete e 25 no lanche" = 2 itens). A conjunção "e" sozinha NUNCA justifica dividir um preço.
 - Uma única descrição + "reais e centavos" = SEMPRE 1 lançamento.
 - Converta números por extenso: "cinquenta"→50, "duzentos"→200, "mil"→1000, "mil e quinhentos"→1500, "dois mil"→2000.
-- Valores como number em BRL. Fuso America/Sao_Paulo. Agora: ${new Date().toISOString()}.
+- Valores como number em BRL. Fuso America/Sao_Paulo. Agora: ${new Date().toISOString()} (${new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date())}, horário de Brasília).
+- Dia da semana citado sem data ("segunda", "sexta-feira", "terça") → é SEMPRE a PRÓXIMA ocorrência futura a partir de HOJE (o dia da semana atual está explícito acima — use-o para contar, não calcule de cabeça a partir do ISO). Se o dia citado for o mesmo de hoje, use hoje se o horário ainda não passou, senão pule pra próxima semana. NUNCA aponte para uma data passada quando o texto descreve um compromisso futuro.
 - Datas relativas ("amanhã 14h", "sexta 9h", "dia 10") → ISO 8601 absoluto.
 - ⚠️ NUNCA invente ano. Toda data que você gerar (next_due_at, scheduled_at, occurred_at) deve usar o ANO ATUAL (ou o próximo, se o mês/dia já passou neste ano) — jamais um ano anterior ao atual, a não ser que o usuário tenha ESCRITO esse ano explicitamente. Se não conseguir determinar o dia/mês com segurança, deixe o campo de data vazio em vez de adivinhar — o sistema pergunta ao usuário depois.
 
