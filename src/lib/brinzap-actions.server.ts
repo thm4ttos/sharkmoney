@@ -1165,6 +1165,23 @@ export async function applyBillInstallmentFollowUp(
     update.next_due_at = nextDueFromDaySP(patch.payment_day);
     if (!(bill as any).first_due_date) update.first_due_date = update.next_due_at;
   }
+  if (patch.frequency && ["weekly", "biweekly", "monthly", "yearly"].includes(patch.frequency)) {
+    update.frequency = patch.frequency;
+    // Sem dia de vencimento explícito nesta mesma correção: se a conta ainda
+    // não tem next_due_at coerente com a nova frequência, ancora em hoje + 1
+    // ciclo em vez de deixar uma data de outro ritmo (ex.: mensal → semanal).
+    if (!patch.payment_day && patch.frequency !== "monthly") {
+      update.next_due_at = patch.frequency === "weekly"
+        ? new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10)
+        : patch.frequency === "biweekly"
+        ? new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10)
+        : new Date(Date.now() + 365 * 86400_000).toISOString().slice(0, 10);
+    }
+  }
+  if (typeof patch.amount === "number" && patch.amount > 0) {
+    update.amount = patch.amount;
+    update.original_amount = patch.amount;
+  }
   if (Object.keys(update).length === 0) return { ok: false, replyText: "" };
   update.updated_at = new Date().toISOString();
 

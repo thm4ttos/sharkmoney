@@ -7,6 +7,8 @@ export type BillInstallmentPatch = {
   total_installments?: number;
   paid_installments?: number;
   payment_day?: number;
+  frequency?: string;
+  amount?: number;
 };
 
 const COUNT_WORD = String.raw`x|vezes|parcelas?|prestac(?:oes|ao)|mensalidades?|pagamentos?|meses`;

@@ -121,87 +121,176 @@ Notebook — 10x de R$ 180, parcela 7`;
 }
 
 const BRL = (n: number) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
+const FINANCIAL_ITEM_KINDS = ["bill", "installment", "debt"] as const;
+const QUERY_KINDS = new Set([
+  "query_balance", "query_summary", "query_finance_report", "query_appointments",
+  "query_bills", "query_installments", "query_debts", "query_goals", "query_habits",
+  "query_transactions", "query_help", "open_dashboard",
+]);
+
+/** Últimas trocas da conversa (inclui as do próprio onboarding) — dá contexto
+ * ao classificador pra entender complementos curtos como "Fórum dia 10". */
+async function fetchRecentHistory(userId: string, limit = 8): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
+  const { data } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("direction, content, transcription")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []).reverse()
+    .map((m: any) => ({ role: (m.direction === "in" ? "user" : "assistant") as "user" | "assistant", content: (m.transcription || m.content || "").toString() }))
+    .filter((m) => m.content);
+}
+
+/** Responde uma pergunta feita NO MEIO do onboarding (saldo, contas, dívidas
+ * etc.) usando os mesmos módulos de consulta do chat normal. */
+async function answerOffTopicQuery(userId: string, intent: any): Promise<string | null> {
+  const actions = await import("@/lib/brinzap-actions.server");
+  switch (intent.kind) {
+    case "query_balance": {
+      const bal = await actions.getMonthBalance(userId);
+      return `💰 Saldo do mês: *${BRL(bal.balance)}*\n📈 Receitas: ${BRL(bal.income)}\n📉 Despesas: ${BRL(bal.expense)}`;
+    }
+    case "query_bills": return (await actions.queryBills(userId, { filter: intent.filter, hint: intent.hint, dueDay: intent.dueDay })).replyText;
+    case "query_installments": return (await actions.queryInstallments(userId)).replyText;
+    case "query_debts": return (await actions.queryDebts(userId)).replyText;
+    case "query_goals": return (await actions.queryGoals(userId)).replyText;
+    case "query_habits": return (await actions.queryHabits(userId)).replyText;
+    case "query_transactions": return (await actions.queryTransactions(userId, { kind: intent.txKind, limit: 15 })).replyText;
+    case "query_help": return actions.helpMessage();
+    case "open_dashboard": return actions.openDashboardReply().replyText;
+    default: return null;
+  }
+}
+
+type DispatchResult = { count: number; lines: string[]; totalBills: number; totalInstallments: number; totalDebts: number };
 
 /**
- * Ponte para o MESMO motor semântico usado no chat normal (ai-classify +
- * brinzap-actions) — evita ter um parser paralelo e mais burro só porque a
- * mensagem chegou durante o onboarding. O usuário pode responder em prosa
- * livre, misturando conta fixa + parcelamento + dívida na mesma mensagem
- * (ex.: "consórcio 220 parcelas... fórum R$303,60... aluguel toda semana"),
- * e cada item cai no módulo certo (recurring_bills / installment_purchases /
- * debts) sem nunca gerar uma transação nem mexer no saldo.
+ * Grava (ou ATUALIZA, se já existir algo parecido) cada item classificado no
+ * módulo certo — recurring_bills / installment_purchases / debts. Nunca gera
+ * transação nem mexe no saldo: são obrigações, não movimentações realizadas.
  */
-async function recordFreeformFinancialItems(
-  userId: string,
-  text: string,
-  allowedKinds: Array<"bill" | "installment" | "debt">,
-): Promise<{ ok: boolean; count: number; lines: string[]; totalBills: number; totalInstallments: number; totalDebts: number }> {
-  const { classifyMessage } = await import("@/lib/ai-classify.server");
+async function dispatchClassifiedItems(userId: string, items: any[]): Promise<DispatchResult> {
   const actions = await import("@/lib/brinzap-actions.server");
-
-  let intent: any;
-  try {
-    intent = await classifyMessage(text, []);
-  } catch (e) {
-    console.error("[onboarding] classifyMessage failed", e);
-    intent = { kind: "unknown" };
-  }
-
-  const rawItems: any[] = intent?.kind === "bulk" && Array.isArray(intent.items)
-    ? intent.items
-    : intent?.kind
-      ? [intent]
-      : [];
-  const items = rawItems.filter((it) => allowedKinds.includes(it?.kind));
-
   const lines: string[] = [];
-  let totalBills = 0, totalInstallments = 0, totalDebts = 0, ok = 0;
+  let totalBills = 0, totalInstallments = 0, totalDebts = 0;
 
   for (const it of items) {
     if (it.kind === "bill") {
+      const title = (it.title ?? it.description ?? "").toString().trim();
+      const existing = title ? await actions.findRecentBillForFollowUp(userId, title, 168) : null;
+      if (existing) {
+        const patch: Record<string, unknown> = {};
+        if (it.frequency) patch.frequency = it.frequency;
+        if (it.due_day) patch.payment_day = it.due_day;
+        if (typeof it.amount === "number" && it.amount > 0) patch.amount = it.amount;
+        if (it.installments_total) patch.total_installments = it.installments_total;
+        if (typeof it.installments_paid === "number") patch.paid_installments = it.installments_paid;
+        const r = await actions.applyBillInstallmentFollowUp(userId, existing.id, patch as any);
+        if (r.ok) {
+          totalBills += Number(it.amount) || 0;
+          lines.push(`🔄 ${title || existing.title} — atualizado${it.frequency ? ` (${it.frequency === "weekly" ? "semanal" : it.frequency === "biweekly" ? "quinzenal" : it.frequency === "yearly" ? "anual" : "mensal"})` : ""}${it.due_day ? ` · vence dia ${it.due_day}` : ""}`);
+          continue;
+        }
+      }
       const r = await actions.recordBill(userId, {
-        title: it.title ?? it.description,
-        amount: it.amount,
-        frequency: it.frequency,
-        next_due_at: it.next_due_at,
-        due_day: it.due_day,
-        category: it.category,
-        total_installments: it.installments_total,
-        paid_installments: it.installments_paid,
+        title, amount: it.amount, frequency: it.frequency, next_due_at: it.next_due_at,
+        due_day: it.due_day, category: it.category,
+        total_installments: it.installments_total, paid_installments: it.installments_paid,
       });
       if (r.ok || r.needsDay) {
-        ok++;
         totalBills += Number(it.amount) || 0;
-        lines.push(`🏠 ${it.title ?? it.description} — ${BRL(Number(it.amount) || 0)}${r.needsDay ? " (falta o dia do vencimento — ajuste depois no app)" : ""}`);
+        lines.push(`🏠 ${title} — ${BRL(Number(it.amount) || 0)}${r.needsDay ? " (falta o dia do vencimento — ajuste depois no app)" : ""}`);
       }
     } else if (it.kind === "installment") {
       const r = await actions.recordInstallment(userId, {
-        title: it.title ?? it.description,
-        amount: it.amount,
-        installments_total: it.installments_total,
-        installments_paid: it.installments_paid,
+        title: it.title ?? it.description, amount: it.amount,
+        installments_total: it.installments_total, installments_paid: it.installments_paid,
         total_amount: it.total_amount,
       });
       if (r.ok) {
-        ok++;
         totalInstallments += Number(it.amount) || 0;
         lines.push(`💳 ${it.title ?? it.description} — ${it.installments_paid ?? 0}/${it.installments_total ?? "?"} pagas`);
       }
     } else if (it.kind === "debt") {
-      const r = await actions.recordDebt(userId, {
-        title: it.title ?? it.description,
-        amount: it.amount,
-        creditor: it.creditor,
-      });
+      const r = await actions.recordDebt(userId, { title: it.title ?? it.description, amount: it.amount, creditor: it.creditor });
       if (r.ok) {
-        ok++;
         totalDebts += Number(it.amount) || 0;
         lines.push(`🧾 ${it.title ?? it.description} — ${BRL(Number(it.amount) || 0)}`);
       }
     }
   }
 
-  return { ok: ok > 0, count: ok, lines, totalBills, totalInstallments, totalDebts };
+  return { count: lines.length, lines, totalBills, totalInstallments, totalDebts };
+}
+
+/**
+ * Ponte para o MESMO motor semântico usado no chat normal (ai-classify +
+ * brinzap-actions) — evita ter um parser paralelo e mais burro só porque a
+ * mensagem chegou durante o onboarding.
+ */
+async function recordFreeformFinancialItems(
+  userId: string,
+  text: string,
+  history: Array<{ role: "user" | "assistant"; content: string }>,
+): Promise<{ ok: boolean } & DispatchResult> {
+  const { classifyMessage } = await import("@/lib/ai-classify.server");
+  let intent: any;
+  try {
+    intent = await classifyMessage(text, history);
+  } catch (e) {
+    console.error("[onboarding] classifyMessage failed", e);
+    intent = { kind: "unknown" };
+  }
+  const rawItems: any[] = intent?.kind === "bulk" && Array.isArray(intent.items) ? intent.items : intent?.kind ? [intent] : [];
+  const items = rawItems.filter((it) => (FINANCIAL_ITEM_KINDS as readonly string[]).includes(it?.kind));
+  const r = await dispatchClassifiedItems(userId, items);
+  return { ok: r.count > 0, ...r };
+}
+
+type GateAnswer =
+  | { type: "yes"; items: any[] }
+  | { type: "no" }
+  | { type: "query"; reply: string }
+  | { type: "unclear" };
+
+/**
+ * Interpreta a resposta a uma pergunta de "portão" (Você possui X?) sem
+ * exigir "1"/"2" — aceita sim/não em qualquer forma, dados já embutidos na
+ * resposta ("tenho R$1.200 no Nubank"), ou uma pergunta fora do assunto.
+ */
+async function interpretGateAnswer(
+  userId: string,
+  text: string,
+  history: Array<{ role: "user" | "assistant"; content: string }>,
+): Promise<GateAnswer> {
+  const norm = text.trim();
+  if (YES.test(norm) && norm.length <= 20) return { type: "yes", items: [] };
+  if (NO.test(norm) && norm.length <= 20) return { type: "no" };
+
+  const { classifyMessage } = await import("@/lib/ai-classify.server");
+  let intent: any;
+  try {
+    intent = await classifyMessage(norm, history);
+  } catch (e) {
+    console.error("[onboarding] classifyMessage(gate) failed", e);
+    intent = { kind: "unknown" };
+  }
+
+  if (QUERY_KINDS.has(intent?.kind)) {
+    const reply = await answerOffTopicQuery(userId, intent);
+    if (reply) return { type: "query", reply };
+  }
+  if (intent?.kind === "confirm_yes") return { type: "yes", items: [] };
+  if (intent?.kind === "confirm_no") return { type: "no" };
+
+  const rawItems: any[] = intent?.kind === "bulk" && Array.isArray(intent.items) ? intent.items : intent?.kind ? [intent] : [];
+  const items = rawItems.filter((it) => (FINANCIAL_ITEM_KINDS as readonly string[]).includes(it?.kind));
+  if (items.length > 0) return { type: "yes", items };
+
+  if (YES.test(norm)) return { type: "yes", items: [] };
+  if (NO.test(norm)) return { type: "no" };
+  return { type: "unclear" };
 }
 
 // Parser leve para listas de contas/parcelados — usado só como rede de
@@ -373,6 +462,15 @@ Enquanto isso já posso registrar:
   // quando advance=false (pede pra tentar de novo).
   let confirmText: string | undefined;
 
+  const history = await fetchRecentHistory(userId);
+
+  const applyDispatchResult = (r: DispatchResult) => {
+    answers.billsTotal = (answers.billsTotal ?? 0) + r.totalBills;
+    answers.installmentsTotal = (answers.installmentsTotal ?? 0) + r.totalInstallments;
+    answers.debtsTotal = (answers.debtsTotal ?? 0) + r.totalDebts;
+    if (r.count > 0) confirmText = `Anotado! ✅\n\n${r.lines.join("\n")}`;
+  };
+
   switch (step) {
     case "name":
       answers.name = norm.slice(0, 80);
@@ -392,21 +490,37 @@ Enquanto isso já posso registrar:
     case "goal":
       answers.goal = norm.slice(0, 120);
       break;
-    case "has_bills":
-      if (YES.test(norm)) { answers.has_bills = true; }
-      else if (NO.test(norm)) { answers.has_bills = false; answers.bills = []; }
-      else { advance = false; reply = "Responda *1* para Sim ou *2* para Não."; break; }
-      // Se sim, próximo é "bills"; se não, pulamos
+    case "has_bills": {
+      const g = await interpretGateAnswer(userId, norm, history);
+      if (g.type === "query") { return { handled: true, reply: `${g.reply}\n\n${questionFor("has_bills", answers)}` }; }
+      if (g.type === "unclear") {
+        return { handled: true, reply: "Não captei — você tem contas fixas mensais (aluguel, luz, internet, academia...)? Pode responder com suas palavras, tipo *\"sim, aluguel e internet\"* ou *\"não tenho\"* 🙂" };
+      }
+      answers.has_bills = g.type === "yes";
+      if (g.type === "yes" && g.items.length > 0) {
+        applyDispatchResult(await dispatchClassifiedItems(userId, g.items));
+      }
+      // Já veio com contas discriminadas na própria resposta → não precisa
+      // pedir de novo, pula direto pra próxima pergunta (has_installments).
+      if (g.type === "yes" && g.items.length > 0) break;
       if (answers.has_bills) {
         await supabaseAdmin.from("onboarding_progress").update({
           current_step: "bills", answers, last_prompt_at: new Date().toISOString(),
         }).eq("user_id", userId);
-        return { handled: true, reply: questionFor("bills", answers) };
+        return { handled: true, reply: (confirmText ? `${confirmText}\n\n` : "") + questionFor("bills", answers) };
       }
       break;
+    }
     case "bills": {
-      const r = await recordFreeformFinancialItems(userId, norm, ["bill", "installment", "debt"]);
+      const r = await recordFreeformFinancialItems(userId, norm, history);
       if (!r.ok) {
+        // Pode ser uma pergunta fora do assunto, não necessariamente uma lista.
+        const { classifyMessage } = await import("@/lib/ai-classify.server");
+        const intent = await classifyMessage(norm, history).catch(() => ({ kind: "unknown" }) as any);
+        if (QUERY_KINDS.has(intent?.kind)) {
+          const qReply = await answerOffTopicQuery(userId, intent);
+          if (qReply) return { handled: true, reply: `${qReply}\n\n${questionFor("bills", answers)}` };
+        }
         // Rede de segurança: o motor de IA não reconheceu nada — tenta o
         // parser simples linha-a-linha antes de pedir de novo.
         const legacy = parseLinesMoney(norm).filter((b) => b.amount);
@@ -417,62 +531,73 @@ Enquanto isso já posso registrar:
         answers.billsTotal = (answers.billsTotal ?? 0) + total;
         break;
       }
-      answers.billsTotal = (answers.billsTotal ?? 0) + r.totalBills;
-      answers.installmentsTotal = (answers.installmentsTotal ?? 0) + r.totalInstallments;
-      answers.debtsTotal = (answers.debtsTotal ?? 0) + r.totalDebts;
-      confirmText = `Anotado! ✅\n\n${r.lines.join("\n")}`;
+      applyDispatchResult(r);
       break;
     }
-    case "has_installments":
-      if (YES.test(norm)) { answers.has_installments = true; }
-      else if (NO.test(norm)) { answers.has_installments = false; }
-      else { advance = false; reply = "Responda *1* para Sim ou *2* para Não."; break; }
+    case "has_installments": {
+      const g = await interpretGateAnswer(userId, norm, history);
+      if (g.type === "query") { return { handled: true, reply: `${g.reply}\n\n${questionFor("has_installments", answers)}` }; }
+      if (g.type === "unclear") {
+        return { handled: true, reply: "Não captei — você tem compras parceladas (carnê, financiamento, consórcio...)? Pode responder com suas palavras 🙂" };
+      }
+      answers.has_installments = g.type === "yes";
+      if (g.type === "yes" && g.items.length > 0) {
+        applyDispatchResult(await dispatchClassifiedItems(userId, g.items));
+        break;
+      }
       if (answers.has_installments) {
         await supabaseAdmin.from("onboarding_progress").update({
           current_step: "installments", answers, last_prompt_at: new Date().toISOString(),
         }).eq("user_id", userId);
-        return { handled: true, reply: questionFor("installments", answers) };
+        return { handled: true, reply: (confirmText ? `${confirmText}\n\n` : "") + questionFor("installments", answers) };
       }
-      break;
-    case "installments": {
-      const r = await recordFreeformFinancialItems(userId, norm, ["bill", "installment", "debt"]);
-      if (!r.ok) { advance = false; reply = "Não consegui identificar os parcelamentos. Tente: *iPhone — 12x de R$ 320, parcela 3*"; break; }
-      answers.billsTotal = (answers.billsTotal ?? 0) + r.totalBills;
-      answers.installmentsTotal = (answers.installmentsTotal ?? 0) + r.totalInstallments;
-      answers.debtsTotal = (answers.debtsTotal ?? 0) + r.totalDebts;
-      confirmText = `Anotado! ✅\n\n${r.lines.join("\n")}`;
       break;
     }
-    case "has_debts":
-      if (YES.test(norm) && norm.length > 3) {
-        // já veio descrição na mesma mensagem
-        answers.has_debts = true;
-        const r = await recordFreeformFinancialItems(userId, norm.replace(/^(s|sim)[\s,.:-]*/i, ""), ["bill", "installment", "debt"]);
-        if (r.ok) {
-          answers.billsTotal = (answers.billsTotal ?? 0) + r.totalBills;
-          answers.installmentsTotal = (answers.installmentsTotal ?? 0) + r.totalInstallments;
-          answers.debtsTotal = (answers.debtsTotal ?? 0) + r.totalDebts;
-          confirmText = `Anotado! ✅\n\n${r.lines.join("\n")}`;
+    case "installments": {
+      const r = await recordFreeformFinancialItems(userId, norm, history);
+      if (!r.ok) {
+        const { classifyMessage } = await import("@/lib/ai-classify.server");
+        const intent = await classifyMessage(norm, history).catch(() => ({ kind: "unknown" }) as any);
+        if (QUERY_KINDS.has(intent?.kind)) {
+          const qReply = await answerOffTopicQuery(userId, intent);
+          if (qReply) return { handled: true, reply: `${qReply}\n\n${questionFor("installments", answers)}` };
         }
+        advance = false; reply = "Não consegui identificar os parcelamentos. Tente: *iPhone — 12x de R$ 320, parcela 3*"; break;
+      }
+      applyDispatchResult(r);
+      break;
+    }
+    case "has_debts": {
+      const g = await interpretGateAnswer(userId, norm, history);
+      if (g.type === "query") { return { handled: true, reply: `${g.reply}\n\n${questionFor("has_debts", answers)}` }; }
+      if (g.type === "unclear") {
+        return { handled: true, reply: "Não captei — você tem alguma dívida hoje (cartão, empréstimo, financiamento...)? Pode responder com suas palavras, tipo *\"devo 1200 no Nubank\"* ou *\"não devo nada\"* 🙂" };
+      }
+      answers.has_debts = g.type === "yes";
+      if (g.type === "yes" && g.items.length > 0) {
+        applyDispatchResult(await dispatchClassifiedItems(userId, g.items));
         break;
       }
-      if (YES.test(norm)) {
-        answers.has_debts = true;
+      if (answers.has_debts) {
         await supabaseAdmin.from("onboarding_progress").update({
           current_step: "debts", answers, last_prompt_at: new Date().toISOString(),
         }).eq("user_id", userId);
-        return { handled: true, reply: questionFor("debts", answers) };
+        return { handled: true, reply: (confirmText ? `${confirmText}\n\n` : "") + questionFor("debts", answers) };
       }
-      if (NO.test(norm)) { answers.has_debts = false; break; }
-      advance = false; reply = "Responda *1* para Sim ou *2* para Não.";
       break;
+    }
     case "debts": {
-      const r = await recordFreeformFinancialItems(userId, norm, ["bill", "installment", "debt"]);
-      if (!r.ok) { advance = false; reply = "Não consegui identificar as dívidas. Tente: *Cartão Nubank R$ 1.200*"; break; }
-      answers.billsTotal = (answers.billsTotal ?? 0) + r.totalBills;
-      answers.installmentsTotal = (answers.installmentsTotal ?? 0) + r.totalInstallments;
-      answers.debtsTotal = (answers.debtsTotal ?? 0) + r.totalDebts;
-      confirmText = `Anotado! ✅\n\n${r.lines.join("\n")}`;
+      const r = await recordFreeformFinancialItems(userId, norm, history);
+      if (!r.ok) {
+        const { classifyMessage } = await import("@/lib/ai-classify.server");
+        const intent = await classifyMessage(norm, history).catch(() => ({ kind: "unknown" }) as any);
+        if (QUERY_KINDS.has(intent?.kind)) {
+          const qReply = await answerOffTopicQuery(userId, intent);
+          if (qReply) return { handled: true, reply: `${qReply}\n\n${questionFor("debts", answers)}` };
+        }
+        advance = false; reply = "Não consegui identificar as dívidas. Tente: *Cartão Nubank R$ 1.200*"; break;
+      }
+      applyDispatchResult(r);
       break;
     }
     case "goal_amount":
@@ -481,11 +606,15 @@ Enquanto isso já posso registrar:
         answers.goal_specific = { title: norm.slice(0, 120), amount: parseMoney(norm) };
       }
       break;
-    case "reminders":
-      if (YES.test(norm)) answers.reminders = true;
-      else if (NO.test(norm)) answers.reminders = false;
-      else { advance = false; reply = "Responda *1* para Sim ou *2* para Não."; break; }
+    case "reminders": {
+      const g = await interpretGateAnswer(userId, norm, history);
+      if (g.type === "query") { return { handled: true, reply: `${g.reply}\n\n${questionFor("reminders", answers)}` }; }
+      if (g.type === "unclear") {
+        return { handled: true, reply: "Não captei — posso te mandar lembretes automáticos por aqui? Responda algo como *\"pode sim\"* ou *\"não precisa\"* 🙂" };
+      }
+      answers.reminders = g.type === "yes";
       break;
+    }
     case "notify_time":
       answers.notify_time = norm.slice(0, 30);
       break;
