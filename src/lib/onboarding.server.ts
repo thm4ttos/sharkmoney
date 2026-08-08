@@ -120,7 +120,92 @@ Notebook — 10x de R$ 180, parcela 7`;
   }
 }
 
-// Parser leve para listas de contas/parcelados
+const BRL = (n: number) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
+
+/**
+ * Ponte para o MESMO motor semântico usado no chat normal (ai-classify +
+ * brinzap-actions) — evita ter um parser paralelo e mais burro só porque a
+ * mensagem chegou durante o onboarding. O usuário pode responder em prosa
+ * livre, misturando conta fixa + parcelamento + dívida na mesma mensagem
+ * (ex.: "consórcio 220 parcelas... fórum R$303,60... aluguel toda semana"),
+ * e cada item cai no módulo certo (recurring_bills / installment_purchases /
+ * debts) sem nunca gerar uma transação nem mexer no saldo.
+ */
+async function recordFreeformFinancialItems(
+  userId: string,
+  text: string,
+  allowedKinds: Array<"bill" | "installment" | "debt">,
+): Promise<{ ok: boolean; count: number; lines: string[]; totalBills: number; totalInstallments: number; totalDebts: number }> {
+  const { classifyMessage } = await import("@/lib/ai-classify.server");
+  const actions = await import("@/lib/brinzap-actions.server");
+
+  let intent: any;
+  try {
+    intent = await classifyMessage(text, []);
+  } catch (e) {
+    console.error("[onboarding] classifyMessage failed", e);
+    intent = { kind: "unknown" };
+  }
+
+  const rawItems: any[] = intent?.kind === "bulk" && Array.isArray(intent.items)
+    ? intent.items
+    : intent?.kind
+      ? [intent]
+      : [];
+  const items = rawItems.filter((it) => allowedKinds.includes(it?.kind));
+
+  const lines: string[] = [];
+  let totalBills = 0, totalInstallments = 0, totalDebts = 0, ok = 0;
+
+  for (const it of items) {
+    if (it.kind === "bill") {
+      const r = await actions.recordBill(userId, {
+        title: it.title ?? it.description,
+        amount: it.amount,
+        frequency: it.frequency,
+        next_due_at: it.next_due_at,
+        due_day: it.due_day,
+        category: it.category,
+        total_installments: it.installments_total,
+        paid_installments: it.installments_paid,
+      });
+      if (r.ok || r.needsDay) {
+        ok++;
+        totalBills += Number(it.amount) || 0;
+        lines.push(`🏠 ${it.title ?? it.description} — ${BRL(Number(it.amount) || 0)}${r.needsDay ? " (falta o dia do vencimento — ajuste depois no app)" : ""}`);
+      }
+    } else if (it.kind === "installment") {
+      const r = await actions.recordInstallment(userId, {
+        title: it.title ?? it.description,
+        amount: it.amount,
+        installments_total: it.installments_total,
+        installments_paid: it.installments_paid,
+        total_amount: it.total_amount,
+      });
+      if (r.ok) {
+        ok++;
+        totalInstallments += Number(it.amount) || 0;
+        lines.push(`💳 ${it.title ?? it.description} — ${it.installments_paid ?? 0}/${it.installments_total ?? "?"} pagas`);
+      }
+    } else if (it.kind === "debt") {
+      const r = await actions.recordDebt(userId, {
+        title: it.title ?? it.description,
+        amount: it.amount,
+        creditor: it.creditor,
+      });
+      if (r.ok) {
+        ok++;
+        totalDebts += Number(it.amount) || 0;
+        lines.push(`🧾 ${it.title ?? it.description} — ${BRL(Number(it.amount) || 0)}`);
+      }
+    }
+  }
+
+  return { ok: ok > 0, count: ok, lines, totalBills, totalInstallments, totalDebts };
+}
+
+// Parser leve para listas de contas/parcelados — usado só como rede de
+// segurança quando o motor de IA não reconhece nenhum item na resposta.
 function parseLinesMoney(input: string): Array<{ title: string; amount: number | null; raw: string }> {
   const lines = input.split(/\r?\n|;|·|•/).map((l) => l.trim()).filter(Boolean);
   return lines.map((raw) => {
@@ -137,51 +222,9 @@ function parseLinesMoney(input: string): Array<{ title: string; amount: number |
 }
 
 async function persistFinancialAnswers(userId: string, answers: any) {
-  // Cria recurring_bills
-  if (Array.isArray(answers.bills)) {
-    for (const b of answers.bills) {
-      if (!b?.title || !b?.amount) continue;
-      try {
-        // próxima data de vencimento = hoje + 30d (placeholder; usuário ajusta no app)
-        const next = new Date(Date.now() + 30 * 86400000).toISOString();
-        await supabaseAdmin.from("recurring_bills").insert({
-          user_id: userId,
-          title: b.title,
-          amount: b.amount,
-          frequency: "monthly",
-          next_due_at: next,
-        } as any);
-      } catch { /* ignora */ }
-    }
-  }
-  // installment_purchases
-  if (Array.isArray(answers.installments)) {
-    for (const it of answers.installments) {
-      if (!it?.title) continue;
-      try {
-        await supabaseAdmin.from("installment_purchases").insert({
-          user_id: userId,
-          title: it.title,
-          installment_amount: it.amount ?? null,
-          installments_total: it.total ?? null,
-          installments_paid: it.paid ?? null,
-        } as any);
-      } catch { /* ignora */ }
-    }
-  }
-  // debts
-  if (Array.isArray(answers.debts)) {
-    for (const d of answers.debts) {
-      if (!d?.title) continue;
-      try {
-        await supabaseAdmin.from("debts").insert({
-          user_id: userId,
-          title: d.title,
-          amount: d.amount ?? null,
-        } as any);
-      } catch { /* ignora */ }
-    }
-  }
+  // Contas fixas, parcelamentos e dívidas já foram gravados NA HORA, durante
+  // as respectivas etapas (recordFreeformFinancialItems → recordBill /
+  // recordInstallment / recordDebt) — repetir aqui duplicaria os registros.
   // meta financeira
   if (answers.goal_specific) {
     try {
@@ -202,9 +245,7 @@ async function persistFinancialAnswers(userId: string, answers: any) {
 
 function summary(answers: any): string {
   const income = Number(answers.income ?? 0);
-  const billsTotal = Array.isArray(answers.bills)
-    ? answers.bills.reduce((s: number, b: any) => s + (Number(b.amount) || 0), 0)
-    : 0;
+  const billsTotal = Number(answers.billsTotal ?? 0);
   const pct = income > 0 ? Math.round((billsTotal / income) * 100) : 0;
   const fmt = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
   return `📊 *Configuração concluída!*
@@ -327,6 +368,10 @@ Enquanto isso já posso registrar:
   // Capturar resposta da etapa atual em `answers`
   let advance = true;
   let reply: string | undefined;
+  // Texto de confirmação (ex.: "Anotado! ✅ ...") mostrado ANTES da próxima
+  // pergunta, sem interromper o fluxo — diferente de `reply`, que só é usado
+  // quando advance=false (pede pra tentar de novo).
+  let confirmText: string | undefined;
 
   switch (step) {
     case "name":
@@ -359,13 +404,28 @@ Enquanto isso já posso registrar:
         return { handled: true, reply: questionFor("bills", answers) };
       }
       break;
-    case "bills":
-      answers.bills = parseLinesMoney(norm).filter((b) => b.amount);
-      if (!answers.bills.length) { advance = false; reply = "Não consegui identificar valores. Tente: *Aluguel R$ 800*"; break; }
+    case "bills": {
+      const r = await recordFreeformFinancialItems(userId, norm, ["bill", "installment", "debt"]);
+      if (!r.ok) {
+        // Rede de segurança: o motor de IA não reconheceu nada — tenta o
+        // parser simples linha-a-linha antes de pedir de novo.
+        const legacy = parseLinesMoney(norm).filter((b) => b.amount);
+        if (!legacy.length) { advance = false; reply = "Não consegui identificar valores. Tente: *Aluguel R$ 800*"; break; }
+        const actions = await import("@/lib/brinzap-actions.server");
+        let total = 0;
+        for (const b of legacy) { await actions.recordBill(userId, { title: b.title, amount: b.amount! }); total += b.amount!; }
+        answers.billsTotal = (answers.billsTotal ?? 0) + total;
+        break;
+      }
+      answers.billsTotal = (answers.billsTotal ?? 0) + r.totalBills;
+      answers.installmentsTotal = (answers.installmentsTotal ?? 0) + r.totalInstallments;
+      answers.debtsTotal = (answers.debtsTotal ?? 0) + r.totalDebts;
+      confirmText = `Anotado! ✅\n\n${r.lines.join("\n")}`;
       break;
+    }
     case "has_installments":
       if (YES.test(norm)) { answers.has_installments = true; }
-      else if (NO.test(norm)) { answers.has_installments = false; answers.installments = []; }
+      else if (NO.test(norm)) { answers.has_installments = false; }
       else { advance = false; reply = "Responda *1* para Sim ou *2* para Não."; break; }
       if (answers.has_installments) {
         await supabaseAdmin.from("onboarding_progress").update({
@@ -375,21 +435,25 @@ Enquanto isso já posso registrar:
       }
       break;
     case "installments": {
-      const items = norm.split(/\r?\n\r?\n|\r?\n/).map((l) => l.trim()).filter(Boolean).map((line) => {
-        const tot = line.match(/(\d+)\s*x/i);
-        const paid = line.match(/parcela\s*(\d+)/i);
-        const amount = parseMoney(line);
-        const title = line.replace(/\d+\s*x.*$/i, "").replace(/parcela\s*\d+/i, "").replace(/r\$?\s*\d[\d.,]*/i, "").trim();
-        return { title: title || line, amount, total: tot ? parseInt(tot[1], 10) : null, paid: paid ? parseInt(paid[1], 10) : null };
-      });
-      answers.installments = items;
+      const r = await recordFreeformFinancialItems(userId, norm, ["bill", "installment", "debt"]);
+      if (!r.ok) { advance = false; reply = "Não consegui identificar os parcelamentos. Tente: *iPhone — 12x de R$ 320, parcela 3*"; break; }
+      answers.billsTotal = (answers.billsTotal ?? 0) + r.totalBills;
+      answers.installmentsTotal = (answers.installmentsTotal ?? 0) + r.totalInstallments;
+      answers.debtsTotal = (answers.debtsTotal ?? 0) + r.totalDebts;
+      confirmText = `Anotado! ✅\n\n${r.lines.join("\n")}`;
       break;
     }
     case "has_debts":
       if (YES.test(norm) && norm.length > 3) {
-        // já veio descrição na mesma msg
+        // já veio descrição na mesma mensagem
         answers.has_debts = true;
-        answers.debts = parseLinesMoney(norm.replace(/^(s|sim)[\s,.:-]*/i, ""));
+        const r = await recordFreeformFinancialItems(userId, norm.replace(/^(s|sim)[\s,.:-]*/i, ""), ["bill", "installment", "debt"]);
+        if (r.ok) {
+          answers.billsTotal = (answers.billsTotal ?? 0) + r.totalBills;
+          answers.installmentsTotal = (answers.installmentsTotal ?? 0) + r.totalInstallments;
+          answers.debtsTotal = (answers.debtsTotal ?? 0) + r.totalDebts;
+          confirmText = `Anotado! ✅\n\n${r.lines.join("\n")}`;
+        }
         break;
       }
       if (YES.test(norm)) {
@@ -399,12 +463,18 @@ Enquanto isso já posso registrar:
         }).eq("user_id", userId);
         return { handled: true, reply: questionFor("debts", answers) };
       }
-      if (NO.test(norm)) { answers.has_debts = false; answers.debts = []; break; }
+      if (NO.test(norm)) { answers.has_debts = false; break; }
       advance = false; reply = "Responda *1* para Sim ou *2* para Não.";
       break;
-    case "debts":
-      answers.debts = parseLinesMoney(norm);
+    case "debts": {
+      const r = await recordFreeformFinancialItems(userId, norm, ["bill", "installment", "debt"]);
+      if (!r.ok) { advance = false; reply = "Não consegui identificar as dívidas. Tente: *Cartão Nubank R$ 1.200*"; break; }
+      answers.billsTotal = (answers.billsTotal ?? 0) + r.totalBills;
+      answers.installmentsTotal = (answers.installmentsTotal ?? 0) + r.totalInstallments;
+      answers.debtsTotal = (answers.debtsTotal ?? 0) + r.totalDebts;
+      confirmText = `Anotado! ✅\n\n${r.lines.join("\n")}`;
       break;
+    }
     case "goal_amount":
       if (/^pular|skip$/i.test(norm)) { answers.goal_specific = null; }
       else {
@@ -436,7 +506,7 @@ Enquanto isso já posso registrar:
       completed_at: new Date().toISOString(),
       last_prompt_at: new Date().toISOString(),
     }).eq("user_id", userId);
-    return { handled: true, reply: summary(answers) };
+    return { handled: true, reply: (confirmText ? `${confirmText}\n\n` : "") + summary(answers) };
   }
 
   await supabaseAdmin.from("onboarding_progress").update({
@@ -445,5 +515,5 @@ Enquanto isso já posso registrar:
     last_prompt_at: new Date().toISOString(),
   }).eq("user_id", userId);
 
-  return { handled: true, reply: questionFor(next, answers, profileName ?? undefined) };
+  return { handled: true, reply: (confirmText ? `${confirmText}\n\n` : "") + questionFor(next, answers, profileName ?? undefined) };
 }
