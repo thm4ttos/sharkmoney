@@ -393,6 +393,10 @@ export async function recordAppointment(
 ): Promise<{ replyText: string; row?: { id: string } }> {
   const parsed = ApptSchema.safeParse({ title: input.title, scheduled_at: input.scheduled_at, notes: input.notes });
   if (!parsed.success || isNaN(new Date(parsed.data.scheduled_at).getTime())) {
+    console.log("[commitment-parser] recordAppointment REJECTED", {
+      title: input.title, scheduled_at: input.scheduled_at, source: input.source ?? null,
+      source_text: input.source_text ?? null, zodError: parsed.success ? null : parsed.error.flatten(),
+    });
     return { replyText: "Pra agendar preciso do que é e quando 🗓️" };
   }
   const { title, scheduled_at } = parsed.data;

@@ -1064,9 +1064,13 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       "appointment_confirm", "appointment_reschedule", "appointment_draft", "appointment",
       "appointment_need_title",
     ]);
-    // Se há outro fluxo pendente (financeiro, onboarding...), a agenda não intercepta.
-    const agendaFlowAllowed = !pending || apptPendingKinds.has(pending.kind);
-    if (!imageUrl && inputText && inputText.trim() && agendaFlowAllowed) {
+    // IMPORTANTE: uma pendência de OUTRO fluxo (financeiro, onboarding...) NUNCA
+    // pode bloquear permanentemente um compromisso novo e completo. Pendências
+    // não expiram sozinhas ("o tempo nunca encerra uma pendência" — ver acima),
+    // então uma pendência antiga esquecida deixava a agenda inteira inoperante.
+    // Por isso o bloco roda sempre; só os passos que DEPENDEM do rascunho de
+    // agenda (0-3 abaixo) exigem que a pendência seja, de fato, de agenda.
+    if (!imageUrl && inputText && inputText.trim()) {
 
       const { sendWhatsAppText } = await import("@/lib/uazapi.server");
       const { pickReply: pickApptReply } = await import("./wa-replies");
@@ -1121,11 +1125,23 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           .slice(0, 80);
 
       // Mensagem completa não depende da IA: título + data + hora = salvar agora.
-      if (!pending && nat.iso && nat.hasDate && nat.hasTime && !isConfirmationPhrase(inputText)) {
+      // Regra: só NÃO cria direto quando o usuário está no meio de um rascunho
+      // de agenda (aí quem decide são os passos 0-3, que sabem mesclar/perguntar
+      // só o que falta). Uma pendência de OUTRO assunto nunca deve impedir isso.
+      if (!isApptPending && nat.iso && nat.hasDate && nat.hasTime && !isConfirmationPhrase(inputText)) {
         const directTitle = titleFromText(inputText);
         const { scoreAppointmentIntent } = await import("@/lib/appointment-confidence.server");
         const directScore = scoreAppointmentIntent({ text: inputText, hasScheduledAt: true });
-        if (!isVagueApptTitle(directTitle) && directScore.autoCreate) {
+        const missingFields: string[] = [];
+        if (isVagueApptTitle(directTitle)) missingFields.push("title");
+        if (!directScore.autoCreate) missingFields.push("confidence");
+        console.log("[commitment-parser]", {
+          rawText: inputText, weekday: nat.hasDate ? "resolved" : null, time: nat.hasTime ? "resolved" : null,
+          resolvedDate: nat.iso, directTitle, score: directScore.score, reasons: directScore.reasons,
+          pendingKindBefore: pending?.kind ?? null, missingFields,
+          action: missingFields.length === 0 ? "CREATE" : "SKIP_TO_STEPS",
+        });
+        if (missingFields.length === 0) {
           const actionsMod = await import("@/lib/brinzap-actions.server");
           replyText = (await actionsMod.recordAppointment(profile.id, {
             title: directTitle,
@@ -1135,6 +1151,9 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
             source_text: inputText,
           })).replyText;
           handled = true;
+          // Uma pendência de OUTRO fluxo fica obsoleta assim que um novo
+          // compromisso completo é criado — não deixa lixo bloqueando o próximo.
+          if (pending) await clearPending();
         }
       }
 
