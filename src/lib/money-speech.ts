@@ -132,9 +132,29 @@ function readWordNumber(tokens: Tok[], start: number): Group | null {
  * Converte números por extenso em dígitos e une grupos adjacentes ligados por
  * "e" (reais + centavos falados sem a palavra "centavos").
  */
+/**
+ * "20mil", "20 mil", "20k", "2,5 mil", "1.5k" → multiplica por 1000 ANTES de
+ * tokenizar. Sem isso, o tokenizador separa em DOIS tokens ("20" dígito solto
+ * + "mil" palavra) e o dígito solto acaba sendo CONCATENADO como string com o
+ * valor de "mil" sozinho (1000) — "20"+"1000" = "201000" em vez de 20*1000 =
+ * 20000. Bug real observado em produção (renda "20mil" virou R$201.000,00).
+ * "\bk\b" nunca casa dentro de "km"/"kg" (não há fronteira de palavra ali).
+ */
+function expandDigitThousands(text: string): string {
+  return text.replace(
+    /(\d+(?:[.,]\d+)?)\s*(mil\b|k\b)/gi,
+    (whole: string, numStr: string) => {
+      const n = parseFloat(numStr.replace(",", "."));
+      if (!Number.isFinite(n)) return whole;
+      const scaled = Math.round(n * 1000 * 100) / 100;
+      return Number.isInteger(scaled) ? String(scaled) : String(scaled).replace(".", ",");
+    },
+  );
+}
+
 export function ptNumberWordsToDigits(text: string): string {
   if (!text) return text;
-  const tokens = tokenize(text);
+  const tokens = tokenize(expandDigitThousands(text));
   const out: string[] = [];
   let i = 0;
 

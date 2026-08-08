@@ -481,6 +481,14 @@ Enquanto isso já posso registrar:
     case "income": {
       const v = parseMoney(norm);
       if (!v) { advance = false; reply = "Hmm, não captei o valor. Pode mandar como *R$ 4.500* ou *4500*?"; break; }
+      // Rede de segurança: um valor mensal absurdamente alto quase certamente
+      // veio de um erro de parsing (ex.: "20mil" virando 201000 por engano),
+      // não de renda real — confirma em vez de gravar silenciosamente.
+      if (v > 1_000_000) {
+        advance = false;
+        reply = `Entendi *${BRL(v)}* por mês — só confirmando porque é um valor bem alto: está certo? Se sim, responda de novo. Se não, me manda o valor certo (ex.: *R$ 4.500* ou *20 mil*).`;
+        break;
+      }
       answers.income = v;
       break;
     }
