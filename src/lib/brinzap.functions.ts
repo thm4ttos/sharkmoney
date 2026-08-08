@@ -449,6 +449,82 @@ export const adminSetUserStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Edição completa de perfil pelo admin (nome, e-mail, telefone) — nunca cria
+// usuário novo, sempre atualiza o mesmo id. Telefone/e-mail duplicados são
+// bloqueados antes de qualquer escrita.
+export const adminUpdateUserProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) =>
+    z.object({
+      userId: z.string().uuid(),
+      name: z.string().trim().min(1).max(120),
+      email: z.string().trim().email(),
+      phone: z.string().trim().min(10).max(20),
+    }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await ensureAdmin(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { normalizePhone, phoneLookupVariants } = await import("@/lib/phone");
+
+    const { data: before, error: beforeErr } = await supabaseAdmin
+      .from("profiles").select("name, email, phone").eq("id", data.userId).maybeSingle();
+    if (beforeErr) throw new Error(beforeErr.message);
+    if (!before) throw new Error("Usuário não encontrado.");
+
+    const phone = normalizePhone(data.phone);
+    if (phone.length < 12 || phone.length > 13) throw new Error("Telefone inválido. Use DDI 55 + DDD + número.");
+
+    if (phone !== normalizePhone(before.phone)) {
+      const { data: dupPhone } = await supabaseAdmin
+        .from("profiles").select("id").in("phone", phoneLookupVariants(phone)).neq("id", data.userId).maybeSingle();
+      if (dupPhone) throw new Error("Este número já está vinculado a outro usuário.");
+    }
+
+    const email = data.email.toLowerCase();
+    if (email !== (before.email ?? "").toLowerCase()) {
+      const { data: dupEmail } = await supabaseAdmin
+        .from("profiles").select("id").ilike("email", email).neq("id", data.userId).maybeSingle();
+      if (dupEmail) throw new Error("Este e-mail já está cadastrado.");
+      // Mantém o auth.users em sincronia — mesmo user_id, só troca o e-mail de login.
+      const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { email });
+      if (authErr) {
+        throw new Error(/already been registered|already exists/i.test(authErr.message)
+          ? "Este e-mail já está cadastrado."
+          : authErr.message);
+      }
+    }
+
+    const { data: row, error } = await supabaseAdmin
+      .from("profiles")
+      .update({ name: data.name, email, phone })
+      .eq("id", data.userId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+
+    const changes: string[] = [];
+    if (before.name !== data.name) changes.push(`Nome: "${before.name || "—"}" → "${data.name}"`);
+    if ((before.email ?? "") !== email) changes.push(`E-mail: "${before.email || "—"}" → "${email}"`);
+    if (normalizePhone(before.phone) !== phone) changes.push(`WhatsApp: "${before.phone || "—"}" → "${phone}"`);
+
+    if (changes.length > 0) {
+      const { logAudit } = await import("@/lib/admin-audit.functions");
+      const { data: admin } = await supabaseAdmin.auth.admin.getUserById(userId);
+      await logAudit({
+        targetUserId: data.userId,
+        adminUserId: userId,
+        adminEmail: admin?.user?.email ?? null,
+        action: "profile_update",
+        description: changes.join("\n"),
+        metadata: { before, after: { name: data.name, email, phone } },
+      });
+    }
+
+    return row;
+  });
+
 // Welcome WhatsApp (chamado direto pelo signup; público mas idempotente por welcome_sent_at)
 export const sendWelcomeWhatsapp = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

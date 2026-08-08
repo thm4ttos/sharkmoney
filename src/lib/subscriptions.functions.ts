@@ -219,6 +219,7 @@ export const adminUpdateSubscription = createServerFn({ method: "POST" })
       subscriptionId: z.string().uuid(),
       planSlug: z.string().min(1).max(60).optional(),
       priceCents: z.number().int().min(0).max(10_000_000).optional(),
+      startedAt: z.string().datetime().nullable().optional(),
       endsAt: z.string().datetime().nullable().optional(),
       status: z.enum(STATUSES).optional(),
     }).parse(i),
@@ -239,6 +240,7 @@ export const adminUpdateSubscription = createServerFn({ method: "POST" })
       if (data.priceCents === undefined) patch.price_cents = plan.price_cents;
     }
     if (data.priceCents !== undefined) patch.price_cents = data.priceCents;
+    if (data.startedAt !== undefined) patch.started_at = data.startedAt;
     if (data.endsAt !== undefined) patch.ends_at = data.endsAt;
     if (data.status) patch.status = data.status;
 

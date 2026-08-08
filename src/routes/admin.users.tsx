@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { adminListUsers, adminSetUserStatus } from "@/lib/brinzap.functions";
+import { adminListUsers, adminSetUserStatus, adminUpdateUserProfile } from "@/lib/brinzap.functions";
 import {
   adminImpersonateUser,
   adminSendPasswordReset,
@@ -21,6 +21,7 @@ import {
 import {
   Search, Lock, Unlock, Phone, KeyRound, Mail, History, Copy, ExternalLink, X, Loader2,
   CalendarPlus, Ban, RefreshCw, Edit3, Sparkles, Users as UsersIcon, Clock, CheckCircle2, XCircle, Wallet, AlertTriangle,
+  User, CreditCard,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/users")({
@@ -468,7 +469,7 @@ function HistoryModal({ user, onClose }: { user: Profile; onClose: () => void })
               <li key={r.id} className="ml-5">
                 <span className="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-gradient-brand glow-neon" />
                 <p className="text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleString("pt-BR")}</p>
-                <p className="text-sm font-medium mt-0.5">{r.description}</p>
+                <p className="text-sm font-medium mt-0.5 whitespace-pre-line">{r.description}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   <span className="inline-block px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 mr-2 text-[10px] uppercase tracking-wider">{r.action}</span>
                   por {r.admin_email ?? r.admin_user_id.slice(0, 8)}
@@ -482,6 +483,15 @@ function HistoryModal({ user, onClose }: { user: Profile; onClose: () => void })
   );
 }
 
+const QUICK_DAYS = [7, 30, 180, 365];
+
+function addDaysToDateInput(base: string, days: number): string {
+  const from = base ? new Date(base + "T12:00:00") : new Date();
+  const start = from.getTime() > Date.now() ? from : new Date();
+  const next = new Date(start.getTime() + days * 86400_000);
+  return next.toISOString().slice(0, 10);
+}
+
 function SubscriptionEditorModal({
   user, sub, plans, onClose, onSaved,
 }: {
@@ -491,33 +501,52 @@ function SubscriptionEditorModal({
   const isCreate = !sub;
   const assign = useServerFn(adminAssignSubscription);
   const update = useServerFn(adminUpdateSubscription);
+  const updateProfile = useServerFn(adminUpdateUserProfile);
 
+  const [tab, setTab] = useState<"perfil" | "assinatura">("perfil");
+
+  // ----- Perfil -----
+  const [name, setName] = useState(user.name ?? "");
+  const [email, setEmail] = useState(user.email ?? "");
+  const [phone, setPhone] = useState(user.phone ?? "");
+
+  // ----- Assinatura -----
   const [planSlug, setPlanSlug] = useState(sub?.plan_slug ?? plans[0]?.slug ?? "monthly");
   const [priceReais, setPriceReais] = useState(((sub?.price_cents ?? 0) / 100).toFixed(2));
+  const [startedAt, setStartedAt] = useState<string>(sub?.started_at ? sub.started_at.slice(0, 10) : "");
   const [endsAt, setEndsAt] = useState<string>(sub?.ends_at ? sub.ends_at.slice(0, 10) : "");
   const [status, setStatus] = useState<string>(sub?.status ?? "active");
   const [note, setNote] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const applyQuickDays = (days: number) => setEndsAt((cur) => addDaysToDateInput(cur, days));
 
   const submit = async () => {
     setSaving(true); setErr(null);
     try {
+      const profileChanged = name.trim() !== (user.name ?? "") || email.trim() !== (user.email ?? "") || phone.trim() !== (user.phone ?? "");
+      if (profileChanged) {
+        if (!name.trim()) throw new Error("Nome é obrigatório.");
+        if (!email.trim()) throw new Error("E-mail é obrigatório.");
+        if (!phone.trim()) throw new Error("WhatsApp é obrigatório.");
+        await updateProfile({ data: { userId: user.id, name: name.trim(), email: email.trim(), phone: phone.trim() } });
+      }
+
       const priceCents = Math.round(Number(priceReais.replace(",", ".")) * 100);
       if (!Number.isFinite(priceCents) || priceCents < 0) throw new Error("Valor inválido");
+      const startedAtIso = startedAt ? new Date(startedAt + "T00:00:00").toISOString() : null;
       const endsAtIso = endsAt ? new Date(endsAt + "T23:59:59").toISOString() : null;
       if (isCreate) {
         await assign({ data: { userId: user.id, planSlug, adminNote: note || undefined } });
-        if (endsAtIso || priceCents !== (plans.find((p) => p.slug === planSlug)?.price_cents ?? 0)) {
-          // refetch latest sub via update — but we don't have id; assignment already created with plan defaults.
-          // The admin can edit again next click if needed. Skip override here to keep it simple.
-        }
       } else {
         await update({
           data: {
             subscriptionId: sub!.id,
             planSlug,
             priceCents,
+            startedAt: startedAtIso,
             endsAt: endsAtIso,
             status: status as any,
           },
@@ -536,74 +565,138 @@ function SubscriptionEditorModal({
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <p className="text-[11px] uppercase tracking-wider text-primary">{isCreate ? "Criar assinatura manual" : "Editar assinatura"}</p>
-            <h2 className="font-display text-xl mt-1">{user.name}</h2>
+            <p className="text-[11px] uppercase tracking-wider text-primary">Editar usuário</p>
+            <h2 className="font-display text-xl mt-1">{user.name || "(sem nome)"}</h2>
             <p className="text-xs text-muted-foreground">{user.email ?? user.phone}</p>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
         </div>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground">Plano</label>
-            <select value={planSlug} onChange={(e) => {
-              setPlanSlug(e.target.value);
-              const p = plans.find((pp) => pp.slug === e.target.value);
-              if (p) setPriceReais((p.price_cents / 100).toFixed(2));
-            }} className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm">
-              {plans.map((p) => (
-                <option key={p.slug} value={p.slug}>{p.name} · {PERIOD_LABEL[p.period] ?? p.period}</option>
-              ))}
-            </select>
-          </div>
+        <div className="inline-flex rounded-xl border border-border p-1 bg-background/40 mb-4">
+          {([
+            { id: "perfil" as const, label: "Perfil", icon: User },
+            { id: "assinatura" as const, label: "Assinatura", icon: CreditCard },
+          ]).map((t) => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={["inline-flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg transition-smooth", tab === t.id ? "bg-primary text-primary-foreground" : "text-muted-foreground"].join(" ")}
+              >
+                <Icon className="h-3.5 w-3.5" /> {t.label}
+              </button>
+            );
+          })}
+        </div>
 
-          {!isCreate && (
-            <div className="grid grid-cols-2 gap-2">
+        {tab === "perfil" ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Nome</label>
+              <input value={name} onChange={(e) => setName(e.target.value)}
+                className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">E-mail</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">WhatsApp</label>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+55 32 99999-4241" className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm font-mono" />
+              <p className="text-[11px] text-muted-foreground mt-1">Sincroniza automaticamente com Admin &gt; WhatsApp &gt; Contatos.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Plano</label>
+              <select value={planSlug} onChange={(e) => {
+                setPlanSlug(e.target.value);
+                const p = plans.find((pp) => pp.slug === e.target.value);
+                if (p) setPriceReais((p.price_cents / 100).toFixed(2));
+              }} className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm">
+                {plans.map((p) => (
+                  <option key={p.slug} value={p.slug}>{p.name} · {PERIOD_LABEL[p.period] ?? p.period}</option>
+                ))}
+              </select>
+            </div>
+
+            {!isCreate && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Valor (R$)</label>
+                  <input value={priceReais} onChange={(e) => setPriceReais(e.target.value)}
+                    className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Status</label>
+                  <select value={status} onChange={(e) => setStatus(e.target.value)}
+                    className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm">
+                    <option value="trial">Trial</option>
+                    <option value="active">Ativo</option>
+                    <option value="expired">Expirado</option>
+                    <option value="cancelled">Cancelado</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {!isCreate && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Data de início</label>
+                  <input type="date" value={startedAt} onChange={(e) => setStartedAt(e.target.value)}
+                    className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Vencimento</label>
+                  <input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)}
+                    className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm" />
+                </div>
+              </div>
+            )}
+
+            {!isCreate && (
               <div>
-                <label className="text-xs text-muted-foreground">Valor (R$)</label>
-                <input value={priceReais} onChange={(e) => setPriceReais(e.target.value)}
+                <p className="text-[11px] text-muted-foreground mb-1">Adicionar ao vencimento</p>
+                <div className="flex gap-1.5">
+                  {QUICK_DAYS.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => applyQuickDays(d)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-primary/30 text-primary px-2 py-1 text-[11px] hover:bg-primary/10 transition-smooth"
+                    >
+                      <CalendarPlus className="h-3 w-3" /> +{d}d
+                    </button>
+                  ))}
+                </div>
+                {endsAt && <p className="text-[11px] text-muted-foreground mt-1">Novo vencimento: {new Date(endsAt + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
+              </div>
+            )}
+
+            {isCreate && (
+              <div>
+                <label className="text-xs text-muted-foreground">Observação (opcional)</label>
+                <input value={note} onChange={(e) => setNote(e.target.value)}
+                  placeholder="Ex: Concedido manualmente pelo suporte"
                   className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Status</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)}
-                  className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="trial">Trial</option>
-                  <option value="active">Ativo</option>
-                  <option value="expired">Expirado</option>
-                  <option value="cancelled">Cancelado</option>
-                </select>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-          {!isCreate && (
-            <div>
-              <label className="text-xs text-muted-foreground">Vencimento</label>
-              <input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)}
-                className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm" />
-            </div>
-          )}
+        {err && <p className="text-xs text-destructive mt-3">{err}</p>}
 
-          {isCreate && (
-            <div>
-              <label className="text-xs text-muted-foreground">Observação (opcional)</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)}
-                placeholder="Ex: Concedido manualmente pelo suporte"
-                className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm" />
-            </div>
-          )}
-
-          {err && <p className="text-xs text-destructive">{err}</p>}
-
-          <button
-            disabled={saving}
-            onClick={submit}
-            className="w-full rounded-xl bg-gradient-brand text-primary-foreground font-medium py-2.5 glow-neon disabled:opacity-50 hover:scale-[1.01] transition-smooth"
-          >
-            {saving ? "Salvando…" : isCreate ? "Criar assinatura" : "Salvar alterações"}
-          </button>
-        </div>
+        <button
+          disabled={saving}
+          onClick={submit}
+          className="w-full rounded-xl bg-gradient-brand text-primary-foreground font-medium py-2.5 glow-neon disabled:opacity-50 hover:scale-[1.01] transition-smooth mt-4"
+        >
+          {saving ? "Salvando…" : isCreate ? "Criar assinatura" : "Salvar alterações"}
+        </button>
       </div>
     </div>
   );
