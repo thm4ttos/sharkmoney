@@ -877,9 +877,20 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     {
       const { data: contact } = await supabaseAdmin
         .from("wa_contacts").select("id, pending_action, last_query_context").eq("phone", phone).maybeSingle();
-      // REGRA: o tempo NUNCA encerra uma pendência. A ação pendente permanece
-      // válida até ser concluída ou cancelada pelo usuário.
-      pending = (contact as any)?.pending_action ?? null;
+      // REGRA: enquanto dentro do prazo, a pendência é válida até ser concluída
+      // ou cancelada pelo usuário — o tempo sozinho não a encerra. Mas toda
+      // pendência com `expires_at` VENCIDO é lixo de um fluxo abandonado, e
+      // nunca pode continuar bloqueando outros assuntos indefinidamente
+      // (ex.: um "receipt_conflict" de dias atrás impedindo criar um compromisso
+      // novo). Pendências sem `expires_at` continuam sem prazo, como sempre.
+      const rawPending = (contact as any)?.pending_action ?? null;
+      const isExpired = !!rawPending?.expires_at && new Date(rawPending.expires_at).getTime() < Date.now();
+      if (isExpired) {
+        await supabaseAdmin.from("wa_contacts").update({ pending_action: null }).eq("phone", phone);
+        pending = null;
+      } else {
+        pending = rawPending;
+      }
       const rawCtx = (contact as any)?.last_query_context ?? null;
       if (rawCtx?.period) lastCtx = rawCtx;
     }
@@ -1841,6 +1852,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
                   bill_id: bill.id,
                   title: bill.title,
                   total: patch!.total_installments ?? bill.total_installments ?? null,
+                  expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
                 } as any,
               },
               { onConflict: "phone" },
@@ -1872,7 +1884,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           await supabaseAdmin.from("wa_contacts").upsert(
             {
               phone, name: profile.name ?? null,
-              pending_action: { kind: "bill_followup", bill_id: r.billId, title: pending.draft?.title ?? null, total: pending.draft?.total_installments ?? null } as any,
+              pending_action: { kind: "bill_followup", bill_id: r.billId, title: pending.draft?.title ?? null, total: pending.draft?.total_installments ?? null, expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() } as any,
             },
             { onConflict: "phone" });
         } else {
@@ -2359,7 +2371,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         await supabaseAdmin.from("wa_contacts").upsert(
           {
             phone, name: profile.name ?? null,
-            pending_action: { kind: "document_pending", doc: docMeta, entry, status: "WAITING_FOR_CONTEXT" } as any,
+            pending_action: { kind: "document_pending", doc: docMeta, entry, status: "WAITING_FOR_CONTEXT", expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() } as any,
           },
           { onConflict: "phone" },
         );
@@ -2377,6 +2389,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
             kind: "attachment_pending", attachment_type: "image", doc: docMeta,
             entry: intent, ocr_text: String((intent as any).extracted_text ?? "").slice(0, 4000),
             status: "WAITING_FOR_CONTEXT",
+            expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
           } as any,
         }, { onConflict: "phone" });
       }
@@ -2397,7 +2410,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
             kind: "attachment_pending", attachment_type: "image", doc: docMeta,
             entry, ocr_text: String((intent as any).extracted_text ?? "").slice(0, 4000),
             status: "WAITING_FOR_CONTEXT",
-
+            expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
           } as any,
         }, { onConflict: "phone" });
         intent = { kind: "image_need_description", amount: entry.amount, occurred_at: entry.occurred_at } as any;
@@ -2982,7 +2995,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
             await supabaseAdmin.from("wa_contacts").upsert(
               {
                 phone, name: profile.name ?? null,
-                pending_action: { kind: "bill_followup", bill_id: billRes.billId, title: intent.title ?? null, total: totalInst ?? null } as any,
+                pending_action: { kind: "bill_followup", bill_id: billRes.billId, title: intent.title ?? null, total: totalInst ?? null, expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() } as any,
               },
               { onConflict: "phone" });
           }
