@@ -101,7 +101,7 @@ function AdminDashboard() {
             </span>
           </header>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" debounce={200}>
               <AreaChart data={data?.growth ?? []}>
                 <defs>
                   <linearGradient id="growthGrad" x1="0" y1="0" x2="0" y2="1">
@@ -130,7 +130,7 @@ function AdminDashboard() {
             </div>
           </header>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" debounce={200}>
               <BarChart data={data?.volume ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.05)" />
                 <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={10} />

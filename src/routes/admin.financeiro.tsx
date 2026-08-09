@@ -105,7 +105,7 @@ function Page() {
             </div>
           </header>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" debounce={200}>
               <LineChart data={data?.monthly ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.05)" />
                 <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={11} />
@@ -126,7 +126,7 @@ function Page() {
         >
           <h2 className="font-display text-lg mb-2">Distribuição por plano</h2>
           <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" debounce={200}>
               <PieChart>
                 <Pie
                   data={data?.byPlan ?? []}

@@ -177,7 +177,7 @@ function DashboardPage() {
                 <Empty msg="Os gráficos serão exibidos após seus primeiros lançamentos." />
               ) : (
                 <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" debounce={200}>
                     <LineChart data={cd.series} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.06)" />
                       <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={11} />
@@ -197,7 +197,7 @@ function DashboardPage() {
                 <Empty msg="Nenhuma despesa registrada no período." />
               ) : (
                 <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" debounce={200}>
                     <PieChart>
                       <Pie data={cd.topCategories} dataKey="total" nameKey="category" innerRadius={55} outerRadius={95} paddingAngle={2}>
                         {cd.topCategories.map((_: any, i: number) => (
@@ -217,7 +217,7 @@ function DashboardPage() {
             <ChartWithPeriod title="Evolução do saldo" globalPeriod={period} delay={0.42}>
               {(cd) => (
                 <div className="h-60">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" debounce={200}>
                     <AreaChart data={cd.balanceSeries} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <defs>
                         <linearGradient id="saldoFill" x1="0" y1="0" x2="0" y2="1">
@@ -239,7 +239,7 @@ function DashboardPage() {
             <ChartWithPeriod title="Entradas x Saídas" globalPeriod={period} delay={0.45}>
               {(cd) => (
                 <div className="h-60">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" debounce={200}>
                     <BarChart data={cd.weekly} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.06)" />
                       <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={11} />
@@ -259,7 +259,7 @@ function DashboardPage() {
             <ChartWithPeriod title="Comparativo entre períodos" subtitle="Período atual vs período anterior" globalPeriod={period} delay={0.48}>
               {(cd) => (
                 <div className="h-60">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" debounce={200}>
                     <BarChart data={cd.comparison} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.06)" />
                       <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={11} />

@@ -81,7 +81,7 @@ function Page() {
           {r.series.length > 0 && (
             <div className="rounded-3xl border border-border bg-card/60 p-5">
               <h2 className="font-display text-lg mb-3">Evolução</h2>
-              <ResponsiveContainer width="100%" height={240}>
+              <ResponsiveContainer width="100%" height={240} debounce={200}>
                 <BarChart data={r.series}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />

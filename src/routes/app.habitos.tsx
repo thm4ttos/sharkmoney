@@ -263,7 +263,7 @@ function Page() {
           <div className="rounded-2xl border border-border bg-background/40 p-4">
             <p className="text-xs text-muted-foreground mb-2">% concluído por dia</p>
             <div className="h-48">
-              <ResponsiveContainer>
+              <ResponsiveContainer debounce={200}>
                 <LineChart data={charts.data?.series ?? []}>
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} />
@@ -276,7 +276,7 @@ function Page() {
           <div className="rounded-2xl border border-border bg-background/40 p-4">
             <p className="text-xs text-muted-foreground mb-2">Hábitos mais realizados</p>
             <div className="h-48">
-              <ResponsiveContainer>
+              <ResponsiveContainer debounce={200}>
                 <BarChart data={charts.data?.top ?? []}>
                   <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 10 }} />

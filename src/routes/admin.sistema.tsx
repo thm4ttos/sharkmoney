@@ -102,7 +102,7 @@ function Page() {
         <h2 className="font-display text-xl">Consumo nos últimos 7 dias</h2>
         <p className="text-xs text-muted-foreground mb-4">WhatsApp + OpenAI</p>
         <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" debounce={200}>
             <BarChart data={usage}>
               <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.06)" />
               <XAxis dataKey="label" stroke="oklch(0.714 0.019 261.3)" fontSize={11} />
