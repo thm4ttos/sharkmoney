@@ -1820,52 +1820,128 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       }
     }
 
-    // ===== COMPLEMENTO DE CONTA RECÉM-CRIADA (consórcio/financiamento) =====
-    // "220 parcelas", "todo dia 15", "já paguei 10" → atualizam a conta do
-    // contexto em vez de virar consulta de parcelamentos ou nova conta.
+    // ===== COMPLEMENTO DE CONTA/PARCELAMENTO RECÉM-CRIADO =====
+    // "220 parcelas", "todo dia 15", "já paguei 10", "corrige pra 850",
+    // "na verdade são 12 parcelas" → atualizam o registro do contexto em vez
+    // de virar consulta ou um lançamento novo. Mesmo parser serve para conta
+    // fixa com prazo (recurring_bills) e compra parcelada (installment_purchases)
+    // — só muda qual tabela recebe o patch.
     if (!imageUrl && inputText && inputText.trim()) {
       const { parseBillFollowUp } = await import("@/lib/bill-installments");
-      const hasMoneyMarker = /r\$|reais|\b\d{1,3}(?:\.\d{3})*,\d{2}\b/i.test(inputText);
       const isBillPending = pending?.kind === "bill_followup" && !!pending.bill_id;
+      const isInstallmentPending = pending?.kind === "installment_followup" && !!pending.installment_id;
       const patch = parseBillFollowUp(inputText, isBillPending ? pending.total ?? null : null);
-      const meaningful = !!patch && (isBillPending || patch.total_installments != null || patch.payment_day != null);
-      if (meaningful && !hasMoneyMarker) {
+      // Um valor monetário solto (sem verbo de correção) fica ambíguo com um
+      // lançamento novo — só passa se vier de um verbo explícito de correção
+      // (é isso que preenche patch.amount) ou já houver uma pendência ativa.
+      const hasMoneyMarker = /r\$|reais|\b\d{1,3}(?:\.\d{3})*,\d{2}\b/i.test(inputText);
+      const moneyOk = !hasMoneyMarker || patch?.amount != null || isBillPending || isInstallmentPending;
+      // "corrige pra 850" sem NENHUMA pendência ativa fica ambíguo com corrigir
+      // o último lançamento (fluxo já existente via kind="correction" na IA) —
+      // só tratamos um valor corrigido como complemento de conta/parcelamento
+      // quando já existe uma pendência explícita apontando pra ela; total de
+      // parcelas e dia de vencimento seguem podendo disparar "a frio" (não são
+      // ambíguos com um lançamento novo).
+      const meaningful = !!patch && (isBillPending || isInstallmentPending
+        || patch.total_installments != null || patch.payment_day != null);
+      if (meaningful && moneyOk) {
         const actions = await import("@/lib/brinzap-actions.server");
-        let bill: any = null;
-        if (isBillPending) {
+
+        if (isInstallmentPending) {
           const { data } = await supabaseAdmin
-            .from("recurring_bills").select("*")
-            .eq("id", pending.bill_id).eq("user_id", profile.id).maybeSingle();
-          bill = data ?? null;
-        }
-        if (!bill) bill = await actions.findRecentBillForFollowUp(profile.id, normalized);
-        if (bill) {
-          console.info("[wa-processor] stage=bill_followup", { billId: bill.id, patch });
-          const res = await actions.applyBillInstallmentFollowUp(profile.id, bill.id, patch!);
-          if (res.ok) {
-            await supabaseAdmin.from("wa_contacts").upsert(
-              {
-                phone,
-                name: profile.name ?? null,
-                pending_action: {
-                  kind: "bill_followup",
-                  bill_id: bill.id,
-                  title: bill.title,
-                  total: patch!.total_installments ?? bill.total_installments ?? null,
-                  expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-                } as any,
-              },
-              { onConflict: "phone" },
-            );
-            const sendResult = await sendWhatsAppText(replyPhone, res.replyText);
-            await supabaseAdmin.from("whatsapp_messages").update({
-              ai_intent: "bill_followup", status: sendResult.ok ? "processed" : "send_error",
-            }).eq("id", row.id);
-            await supabaseAdmin.from("whatsapp_messages").insert({
-              user_id: profile.id, phone: replyPhone, direction: "out", media_type: "text",
-              content: res.replyText, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
-            });
-            return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "bill_followup" };
+            .from("installment_purchases").select("*")
+            .eq("id", pending.installment_id).eq("user_id", profile.id).maybeSingle();
+          if (data) {
+            console.info("[wa-processor] stage=installment_followup", { installmentId: data.id, patch });
+            const res = await actions.applyInstallmentFollowUp(profile.id, data.id, patch!);
+            if (res.ok) {
+              await supabaseAdmin.from("wa_contacts").upsert(
+                {
+                  phone, name: profile.name ?? null,
+                  pending_action: {
+                    kind: "installment_followup", installment_id: data.id, title: data.title,
+                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                  } as any,
+                },
+                { onConflict: "phone" },
+              );
+              const sendResult = await sendWhatsAppText(replyPhone, res.replyText);
+              await supabaseAdmin.from("whatsapp_messages").update({
+                ai_intent: "installment_followup", status: sendResult.ok ? "processed" : "send_error",
+              }).eq("id", row.id);
+              await supabaseAdmin.from("whatsapp_messages").insert({
+                user_id: profile.id, phone: replyPhone, direction: "out", media_type: "text",
+                content: res.replyText, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
+              });
+              return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "installment_followup" };
+            }
+          }
+        } else {
+          let bill: any = null;
+          if (isBillPending) {
+            const { data } = await supabaseAdmin
+              .from("recurring_bills").select("*")
+              .eq("id", pending.bill_id).eq("user_id", profile.id).maybeSingle();
+            bill = data ?? null;
+          }
+          if (!bill) bill = await actions.findRecentBillForFollowUp(profile.id, normalized);
+          // Nenhuma conta fixa recente combina: tenta um parcelamento recente
+          // antes de desistir (só quando não há pendência de conta explícita).
+          let inst: any = null;
+          if (!bill && !isBillPending) inst = await actions.findRecentInstallmentForFollowUp(profile.id, normalized);
+
+          if (bill) {
+            console.info("[wa-processor] stage=bill_followup", { billId: bill.id, patch });
+            const res = await actions.applyBillInstallmentFollowUp(profile.id, bill.id, patch!);
+            if (res.ok) {
+              await supabaseAdmin.from("wa_contacts").upsert(
+                {
+                  phone,
+                  name: profile.name ?? null,
+                  pending_action: {
+                    kind: "bill_followup",
+                    bill_id: bill.id,
+                    title: bill.title,
+                    total: patch!.total_installments ?? bill.total_installments ?? null,
+                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                  } as any,
+                },
+                { onConflict: "phone" },
+              );
+              const sendResult = await sendWhatsAppText(replyPhone, res.replyText);
+              await supabaseAdmin.from("whatsapp_messages").update({
+                ai_intent: "bill_followup", status: sendResult.ok ? "processed" : "send_error",
+              }).eq("id", row.id);
+              await supabaseAdmin.from("whatsapp_messages").insert({
+                user_id: profile.id, phone: replyPhone, direction: "out", media_type: "text",
+                content: res.replyText, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
+              });
+              return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "bill_followup" };
+            }
+          } else if (inst) {
+            console.info("[wa-processor] stage=installment_followup", { installmentId: inst.id, patch });
+            const res = await actions.applyInstallmentFollowUp(profile.id, inst.id, patch!);
+            if (res.ok) {
+              await supabaseAdmin.from("wa_contacts").upsert(
+                {
+                  phone, name: profile.name ?? null,
+                  pending_action: {
+                    kind: "installment_followup", installment_id: inst.id, title: inst.title,
+                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                  } as any,
+                },
+                { onConflict: "phone" },
+              );
+              const sendResult = await sendWhatsAppText(replyPhone, res.replyText);
+              await supabaseAdmin.from("whatsapp_messages").update({
+                ai_intent: "installment_followup", status: sendResult.ok ? "processed" : "send_error",
+              }).eq("id", row.id);
+              await supabaseAdmin.from("whatsapp_messages").insert({
+                user_id: profile.id, phone: replyPhone, direction: "out", media_type: "text",
+                content: res.replyText, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
+              });
+              return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "installment_followup" };
+            }
           }
         }
       }
@@ -1903,6 +1979,75 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         content: billReply, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
       });
       return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "bill_day_reply" };
+    }
+
+    // installment_draft pending — parcelamento com valor/quantidade/total
+    // ambíguo: a próxima mensagem responde SÓ o campo perguntado, o resto do
+    // rascunho é preservado (mesmo mecanismo pro áudio já transcrito: chega
+    // aqui como texto normal, sem tratamento especial por origem).
+    if (pending && pending.kind === "installment_draft" && !imageUrl) {
+      const actionsMod = await import("@/lib/brinzap-actions.server");
+      const draft = { ...(pending.draft ?? {}) };
+      let instReply = "";
+      let resolved = false;
+
+      if (pending.missing === "confirm") {
+        if (YES_RE.test(normalized)) resolved = true;
+        else if (NO_RE.test(normalized)) {
+          instReply = "👍 Ok, não salvei esse parcelamento.";
+          await supabaseAdmin.from("wa_contacts").update({ pending_action: null }).eq("phone", phone);
+        } else {
+          instReply = `Só preciso confirmar: posso salvar ${draft.installments_total} parcelas de ${formatMoneyBR(Number(draft.amount))} (total ${formatMoneyBR(Number(draft.amount) * Number(draft.installments_total))})? Responda *sim* ou *não*.`;
+        }
+      } else if (pending.missing === "amount" || pending.missing === "reconcile") {
+        const found = actionsMod.moneyMatches(inputText)[0];
+        if (found) {
+          draft.amount = found.amount;
+          draft.total_amount = undefined;
+          resolved = true;
+        } else {
+          instReply = "Não captei o valor. Pode mandar só o número (ex.: *1000*)?";
+        }
+      } else if (pending.missing === "installments_total") {
+        const m = normalized.match(/\b(\d{1,4})\b/);
+        const n = m ? parseInt(m[1], 10) : NaN;
+        if (n >= 1 && n <= 2000) { draft.installments_total = n; resolved = true; }
+        else instReply = "Não captei a quantidade. Pode mandar só o número de parcelas (ex.: *10*)?";
+      }
+
+      if (resolved) {
+        const res = await actionsMod.recordInstallment(profile.id, draft);
+        instReply = res.replyText;
+        if (res.ok && res.row) {
+          await supabaseAdmin.from("wa_contacts").upsert(
+            {
+              phone, name: profile.name ?? null,
+              pending_action: {
+                kind: "installment_followup", installment_id: res.row.id, title: draft.title,
+                expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+              } as any,
+            },
+            { onConflict: "phone" });
+        } else {
+          await supabaseAdmin.from("wa_contacts").update({ pending_action: null }).eq("phone", phone);
+        }
+      } else if (instReply && pending.missing !== "confirm") {
+        // Mantém o rascunho vivo pra próxima tentativa.
+        await supabaseAdmin.from("wa_contacts").upsert(
+          { phone, name: profile.name ?? null, pending_action: { ...pending, draft } as any },
+          { onConflict: "phone" },
+        );
+      }
+
+      const sendResult = await sendWhatsAppText(replyPhone, instReply);
+      await supabaseAdmin.from("whatsapp_messages").update({
+        ai_intent: "installment_draft_reply", status: sendResult.ok ? "processed" : "send_error",
+      }).eq("id", row.id);
+      await supabaseAdmin.from("whatsapp_messages").insert({
+        user_id: profile.id, phone: replyPhone, direction: "out", media_type: "text",
+        content: instReply, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
+      });
+      return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "installment_draft_reply" };
     }
 
     // ===== MODO CONSULTOR FINANCEIRO ("Conversa com meu financeiro") =====
@@ -3002,12 +3147,75 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
           replyText = billRes.replyText; break;
         }
 
-        case "installment":
-          replyText = (await actions.recordInstallment(profile.id, {
-            title: intent.title ?? intent.description, amount: intent.amount,
-            installments_total: intent.installments_total, installments_paid: intent.installments_paid,
-            total_amount: intent.total_amount,
-          })).replyText; break;
+        case "installment": {
+          // Nunca adivinhar parcela/valor/total: reconcilia os três números
+          // (valor da parcela × quantidade deve bater com o total, quando a
+          // IA extraiu um total) e só executa com confiança suficiente. Em
+          // dúvida, pergunta SÓ o campo duvidoso e preserva o resto — não
+          // depende do canal (texto ou áudio transcrito): mesma checagem
+          // para os dois, porque a ambiguidade nasce da mensagem, não da
+          // origem.
+          const title = (intent.title ?? intent.description ?? "").trim();
+          const amount = typeof intent.amount === "number" && intent.amount > 0 ? intent.amount : undefined;
+          const total = typeof intent.installments_total === "number" && intent.installments_total > 0 ? intent.installments_total : undefined;
+          const totalAmount = typeof intent.total_amount === "number" && intent.total_amount > 0 ? intent.total_amount : undefined;
+
+          const { gateConfidence } = await import("@/lib/ai-confidence.server");
+          const gate = gateConfidence(intent.confidence);
+          const reconciles = amount && total && totalAmount
+            ? Math.abs(totalAmount - amount * total) <= Math.max(1, totalAmount * 0.02)
+            : true;
+
+          const missing: "reconcile" | "amount" | "installments_total" | "confirm" | null =
+            !reconciles ? "reconcile"
+            : !amount ? "amount"
+            : !total ? "installments_total"
+            : (gate === "ask" || gate === "menu") ? "confirm"
+            : null;
+
+          if (missing) {
+            await supabaseAdmin.from("wa_contacts").upsert(
+              {
+                phone, name: profile.name ?? null,
+                pending_action: {
+                  kind: "installment_draft",
+                  draft: { title, amount, installments_total: total, installments_paid: intent.installments_paid, total_amount: totalAmount },
+                  missing,
+                  expires_at: expiresIn5min(),
+                } as any,
+              },
+              { onConflict: "phone" },
+            );
+            replyText = missing === "reconcile"
+              ? `Encontrei uma inconsistência nesse parcelamento${title ? ` (*${title}*)` : ""}: ${total} parcelas de ${formatMoneyBR(amount!)} dá ${formatMoneyBR(amount! * total!)}, mas também apareceu um total de ${formatMoneyBR(totalAmount!)}. Qual é o valor certo de cada parcela?`
+              : missing === "amount"
+              ? `Não consegui confirmar com segurança o valor de cada parcela${title ? ` de *${title}*` : ""}. Qual é?`
+              : missing === "installments_total"
+              ? `Quantas parcelas são${title ? ` de *${title}*` : ""}?`
+              : `Posso confirmar esse parcelamento?\n\n📝 ${title || "Parcelamento"}\n🔢 ${total} parcelas de ${formatMoneyBR(amount!)} (total ${formatMoneyBR(amount! * total!)})\n\nResponda *sim* pra salvar.`;
+            break;
+          }
+
+          const instRes = await actions.recordInstallment(profile.id, {
+            title, amount, installments_total: total, installments_paid: intent.installments_paid, total_amount: totalAmount,
+          });
+          replyText = instRes.replyText;
+          if (instRes.ok && instRes.row) {
+            // Mantém o contexto pra correções imediatas ("na verdade são 12
+            // parcelas", "corrige pra 850") sem precisar repetir tudo.
+            await supabaseAdmin.from("wa_contacts").upsert(
+              {
+                phone, name: profile.name ?? null,
+                pending_action: {
+                  kind: "installment_followup", installment_id: instRes.row.id, title,
+                  expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                } as any,
+              },
+              { onConflict: "phone" },
+            );
+          }
+          break;
+        }
         case "debt":
           replyText = (await actions.recordDebt(profile.id, {
             title: intent.title ?? intent.description, amount: intent.amount,

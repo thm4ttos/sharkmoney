@@ -96,7 +96,27 @@ export function parsePaymentDay(raw: string): number | null {
   return d >= 1 && d <= 31 ? d : null;
 }
 
-/** Interpreta uma mensagem complementar sobre uma conta já criada. */
+/**
+ * Valor corrigido citado com um VERBO EXPLÍCITO de correção — nunca um valor
+ * solto (isso ficaria ambíguo com um lançamento novo). "Corrige pra 850",
+ * "valor de cada parcela é 850", "muda o valor pra 1200", "na verdade é 90".
+ */
+export function parseCorrectedAmount(raw: string): number | null {
+  const t = norm(raw);
+  const m = t.match(
+    /\b(?:corrige(?:\s+(?:o\s+)?valor)?|valor\s+(?:certo|correto|de\s+cada\s+parcela)|muda(?:r)?\s+(?:o\s+)?valor|troca(?:r)?\s+(?:o\s+)?valor|na\s+verdade\s+(?:e|sao|eh))\s*(?:pra|para|e|eh|de)?\s*(?:r\$)?\s*(\d{1,7}(?:[.,]\d{2})?)\b/,
+  );
+  if (!m) return null;
+  const n = Number(m[1].replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Interpreta uma mensagem complementar sobre uma conta/parcelamento já
+ * criado. Genérico o bastante para `recurring_bills` (conta fixa com prazo)
+ * e `installment_purchases` (compra parcelada) — ambos usam a mesma forma
+ * de patch (total/pagas/dia/valor).
+ */
 export function parseBillFollowUp(raw: string, total?: number | null): BillInstallmentPatch | null {
   const patch: BillInstallmentPatch = {};
   const totalParsed = parseTotalInstallments(raw);
@@ -105,6 +125,8 @@ export function parseBillFollowUp(raw: string, total?: number | null): BillInsta
   if (paid !== null) patch.paid_installments = paid;
   const day = parsePaymentDay(raw);
   if (day) patch.payment_day = day;
+  const correctedAmount = parseCorrectedAmount(raw);
+  if (correctedAmount !== null) patch.amount = correctedAmount;
   return Object.keys(patch).length > 0 ? patch : null;
 }
 

@@ -267,6 +267,9 @@ Em frases como "Pago consórcio 220 parcelas já paguei 1, pago até o dia 15, 3
 - "337,30" (o único valor com formato monetário: vírgula/ponto de centavos, ou precedido de R$) → amount=337.30 (SEMPRE o valor de UMA parcela — nunca o total do consórcio, nunca a contagem de parcelas).
 - "até o dia 15" → due_day=15.
 Regra de identificação: o valor monetário (amount) é o número que tem centavos (vírgula/ponto + 2 dígitos) ou vem com "R$"; a quantidade de parcelas é um número inteiro solto antes/depois da palavra "parcela(s)". NUNCA copie o número de parcelas para "amount" nem o valor em reais para "installments_total".
+Preencha "total_amount" SOMENTE quando o usuário disser o total explicitamente (ex.: "total de 10 mil", um documento mostrando "VALOR TOTAL"). Nunca calcule/estime um total sozinho — o sistema já deriva total_amount = amount × installments_total quando você não tiver certeza; um total inventado que não bate com esse cálculo é pior que deixar o campo vazio. "10 parcelas de mil reais" tem UM valor e UMA contagem — nunca vire "220 parcelas" nem qualquer outro número que não esteja na frase.
+Isso vale IGUAL para texto e para áudio transcrito: uma fala como "dez parcelas de mil reais a partir de dezembro, vencimento máximo dia 10" tem exatamente os mesmos três dados (quantidade, valor, dia) que a versão digitada — extraia com o mesmo rigor, não invente nem arredonde só porque veio de transcrição.
+Se, mesmo assim, sobrar ambiguidade real sobre valor, quantidade de parcelas, vencimento ou qual conta/parcelamento está sendo alterado, use confidence BAIXO (<0.80) em vez de forçar um número — o sistema pergunta ao usuário exatamente o campo em dúvida e preserva os demais; não é necessário (nem desejável) você mesmo formular a pergunta de clarificação para isso.
 - debt: DÍVIDA (empréstimo, valor devido a alguém). Use title, principal via amount, creditor opcional.
 - goal: META financeira (formatura, viagem, reserva). Use title, target_amount, target_date opcional.
 
@@ -788,6 +791,15 @@ export async function transcribeAudio(url: string): Promise<string> {
   form.append("file", new File([blob], `audio.${ext}`, { type: mime }));
   form.append("model", TRANSCRIBE_MODEL);
   form.append("language", "pt");
+  // O `prompt` do Whisper não precisa bater com o conteúdo — ele só influencia
+  // o ESTILO da transcrição. Pedindo algarismos em vez de números por extenso,
+  // reduz a carga em cima do normalizador de números falados (money-speech.ts):
+  // menos "dez parcelas de mil reais", mais "10 parcelas de 1000 reais" já na
+  // saída do Whisper, antes mesmo de chegar no classificador.
+  form.append(
+    "prompt",
+    "Mensagem de WhatsApp em português do Brasil sobre finanças pessoais: gastos, receitas, contas fixas, parcelas, compromissos. Escreva valores e quantidades em algarismos (10, 1000, 850), não por extenso. Ex.: \"gastei 1000 e 10 reais com cigarro\", \"10 parcelas de 1000 reais a partir de dezembro, vencimento dia 10\".",
+  );
   const transcribeController = new AbortController();
   const transcribeTimeout = setTimeout(() => transcribeController.abort(), 30_000);
   let res: Response;

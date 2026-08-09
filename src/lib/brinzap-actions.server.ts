@@ -1313,31 +1313,126 @@ export async function deferBillPayments(userId: string, billIds: string[]): Prom
 export async function recordInstallment(
   userId: string,
   input: { title?: string; amount?: number; installments_total?: number; installments_paid?: number; total_amount?: number },
-): Promise<{ replyText: string; ok: boolean }> {
+): Promise<{ replyText: string; ok: boolean; row?: { id: string } }> {
   const title = (input.title || "").trim();
   const parcel = Number(input.amount);
   const total = Number(input.installments_total) || 1;
   const paid = Math.min(Number(input.installments_paid) || 0, total);
-  const totalAmount = Number(input.total_amount) || parcel * total;
   if (!title || !(parcel > 0) || !(total > 0)) {
     return { ok: false, replyText: "Não captei o parcelamento. Ex.: _Fórum (9ª de 10) — R$ 70_" };
   }
+  // O total é sempre DERIVADO de parcela × quantidade — os dois fatos que o
+  // usuário realmente enunciou ("10 parcelas de mil reais"). Um total_amount
+  // vindo de fora (ex.: OCR de um contrato) só é aceito quando CONCORDA com
+  // o produto; se divergir, o produto vence — nunca um número solto e
+  // potencialmente trocado com a contagem de parcelas.
+  const computedTotal = parcel * total;
+  const inputTotal = Number(input.total_amount);
+  const totalAmount = (Number.isFinite(inputTotal) && inputTotal > 0
+    && Math.abs(inputTotal - computedTotal) <= Math.max(1, computedTotal * 0.02))
+    ? inputTotal
+    : computedTotal;
   const first = new Date();
   first.setDate(10);
-  const { error } = await supabaseAdmin.from("installment_purchases").insert({
+  const { data: created, error } = await supabaseAdmin.from("installment_purchases").insert({
     user_id: userId,
     title,
     total_amount: totalAmount,
     installments_total: total,
     installments_paid: paid,
     first_due_at: first.toISOString().slice(0, 10),
-  });
-  if (error) { console.error("[actions] recordInstallment", error); return { ok: false, replyText: "Não consegui salvar o parcelamento 🙏." }; }
+  }).select("id").single();
+  if (error || !created) { console.error("[actions] recordInstallment", error); return { ok: false, replyText: "Não consegui salvar o parcelamento 🙏." }; }
   const bal = await getMonthBalance(userId);
   const remaining = total - paid;
-  return { ok: true, replyText: `💳 Parcelamento *${title}* — ${paid}/${total} pagas (${remaining} restantes), ${BRL(parcel)}/parcela.
+  return {
+    ok: true,
+    row: { id: created.id as string },
+    replyText: `💳 Parcelamento *${title}* — ${paid}/${total} pagas (${remaining} restantes), ${BRL(parcel)}/parcela.
 
-💰 Saldo do mês: *${BRL(bal.balance)}*` };
+💰 Saldo do mês: *${BRL(bal.balance)}*`,
+  };
+}
+
+/** Parcelamento mais recente do usuário — usado para associar mensagens complementares. */
+export async function findRecentInstallmentForFollowUp(
+  userId: string,
+  hint?: string | null,
+  maxAgeHours = 72,
+): Promise<any | null> {
+  const { data } = await supabaseAdmin
+    .from("installment_purchases")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  const list = (data ?? []) as any[];
+  if (list.length === 0) return null;
+  const stripAccents = (s: string) => s.normalize("NFD").replace(/\p{Mn}/gu, "");
+  const term = stripAccents((hint || "").toLowerCase()).trim();
+  if (term.length >= 4) {
+    const byTitle = list.find((b) => term.includes(stripAccents(String(b.title || "").toLowerCase())));
+    if (byTitle) return byTitle;
+  }
+  const newest = list[0];
+  const ageH = (Date.now() - new Date(newest.created_at).getTime()) / 3600000;
+  return ageH <= maxAgeHours ? newest : null;
+}
+
+/** Card padrão com o estado de um parcelamento. */
+export function installmentCardText(inst: any): string {
+  const total = Number(inst.installments_total ?? 0);
+  const paid = Math.max(0, Math.min(total, Number(inst.paid_installments ?? 0)));
+  const remaining = Math.max(0, total - paid);
+  const parcel = total > 0 ? Number(inst.total_amount ?? 0) / total : 0;
+  return `💳 *${inst.title}*
+💰 ${BRL(parcel)}/parcela — total ${BRL(Number(inst.total_amount ?? 0))}
+🔢 Parcela: *${Math.min(total, paid + 1)} de ${total}*
+✔️ Pagas: *${paid}*
+⏳ Pendentes: *${remaining}*
+📆 Primeiro vencimento: *${formatYMDBr(String(inst.first_due_at ?? "").slice(0, 10))}*`;
+}
+
+/**
+ * Atualiza um parcelamento já criado (total de parcelas, parcelas pagas,
+ * valor da parcela) — sem criar registros duplicados. O valor total é
+ * sempre recalculado como parcela × quantidade.
+ */
+export async function applyInstallmentFollowUp(
+  userId: string,
+  installmentId: string,
+  patch: BillInstallmentPatch,
+): Promise<{ ok: boolean; replyText: string }> {
+  const { data: inst } = await supabaseAdmin
+    .from("installment_purchases").select("*").eq("id", installmentId).eq("user_id", userId).maybeSingle();
+  if (!inst) return { ok: false, replyText: "Não encontrei esse parcelamento para atualizar." };
+
+  const currentTotal = Number((inst as any).installments_total ?? 0);
+  const currentTotalAmount = Number((inst as any).total_amount ?? 0);
+  const currentParcel = currentTotal > 0 ? currentTotalAmount / currentTotal : 0;
+  const newTotal = patch.total_installments ?? currentTotal;
+  const newParcel = patch.amount ?? currentParcel;
+
+  const update: Record<string, unknown> = {};
+  if (patch.total_installments || patch.amount) {
+    update.installments_total = newTotal;
+    update.total_amount = Math.round(newParcel * newTotal * 100) / 100;
+  }
+  if (typeof patch.paid_installments === "number") {
+    update.paid_installments = Math.min(newTotal, patch.paid_installments);
+  }
+  if (Object.keys(update).length === 0) return { ok: false, replyText: "" };
+  update.updated_at = new Date().toISOString();
+
+  const { data: saved, error } = await supabaseAdmin
+    .from("installment_purchases").update(update as any)
+    .eq("id", installmentId).eq("user_id", userId)
+    .select("*").single();
+  if (error || !saved) {
+    console.error("[actions] applyInstallmentFollowUp", error);
+    return { ok: false, replyText: "Não consegui atualizar esse parcelamento agora 🙏." };
+  }
+  return { ok: true, replyText: `✅ Atualizei!\n\n${installmentCardText(saved)}` };
 }
 
 // ===== Debt =====
@@ -1554,7 +1649,7 @@ function parseMoneyBRL(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-function moneyMatches(text: string): Array<{ amount: number; raw: string; start: number; end: number }> {
+export function moneyMatches(text: string): Array<{ amount: number; raw: string; start: number; end: number }> {
   const out: Array<{ amount: number; raw: string; start: number; end: number }> = [];
   let m: RegExpExecArray | null;
   MONEY_RE_GLOBAL.lastIndex = 0;
