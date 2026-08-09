@@ -1312,7 +1312,11 @@ export async function deferBillPayments(userId: string, billIds: string[]): Prom
 // ===== Installment =====
 export async function recordInstallment(
   userId: string,
-  input: { title?: string; amount?: number; installments_total?: number; installments_paid?: number; total_amount?: number },
+  input: {
+    title?: string; amount?: number; installments_total?: number; installments_paid?: number; total_amount?: number;
+    /** Vencimento da 1ª parcela: dia do mês ("vencimento dia 10") ou data ISO explícita ("primeira parcela em setembro"). */
+    due_day?: number; next_due_at?: string;
+  },
 ): Promise<{ replyText: string; ok: boolean; row?: { id: string } }> {
   const title = (input.title || "").trim();
   const parcel = Number(input.amount);
@@ -1332,15 +1336,20 @@ export async function recordInstallment(
     && Math.abs(inputTotal - computedTotal) <= Math.max(1, computedTotal * 0.02))
     ? inputTotal
     : computedTotal;
-  const first = new Date();
-  first.setDate(10);
+  // Vencimento da 1ª parcela: usa o que o usuário disse ("primeira parcela
+  // em setembro", "vence dia 10"); sem isso, cai no antigo padrão (dia 10 do
+  // mês corrente/seguinte). nextDueFromDaySP já rola pro mês seguinte quando
+  // o dia citado já passou este mês — nunca cria vencimento no passado.
+  const firstDueAt = input.next_due_at
+    ? String(input.next_due_at).slice(0, 10)
+    : nextDueFromDaySP(input.due_day && input.due_day >= 1 && input.due_day <= 31 ? input.due_day : 10);
   const { data: created, error } = await supabaseAdmin.from("installment_purchases").insert({
     user_id: userId,
     title,
     total_amount: totalAmount,
     installments_total: total,
     installments_paid: paid,
-    first_due_at: first.toISOString().slice(0, 10),
+    first_due_at: firstDueAt,
   }).select("id").single();
   if (error || !created) { console.error("[actions] recordInstallment", error); return { ok: false, replyText: "Não consegui salvar o parcelamento 🙏." }; }
   const bal = await getMonthBalance(userId);

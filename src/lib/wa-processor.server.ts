@@ -3089,12 +3089,47 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
           replyText = `⚠️ *Tem certeza?*\n\nIsso vai apagar TODOS os seus lançamentos, lembretes e histórico financeiro. Essa ação não pode ser desfeita.\n\nResponda *sim, apagar tudo* para confirmar ou *cancelar* para manter seus dados. (válido por 5 min)`;
           break;
         case "correction": {
-          const r = await actions.correctLastTransaction(profile.id, {
-            correction_field: intent.correction_field, new_amount: intent.new_amount,
-            new_category: intent.new_category, new_description: intent.new_description,
-            new_payment_method: intent.new_payment_method, match_hint: intent.match_hint,
-          });
-          replyText = r.replyText; break;
+          // "Aluguel aumentou pra 1.300", "internet agora custa 130" — uma
+          // correção de VALOR com uma pista que bate com o título de uma
+          // conta fixa ou parcelamento é sobre ESSE registro, não sobre um
+          // lançamento avulso das últimas 24h (correctLastTransaction só olha
+          // transactions). Só intercepta com pista forte (>=4 letras batendo
+          // no título) — sem isso, segue pro fluxo de sempre sem risco de
+          // corrigir a coisa errada.
+          const hint = (intent.correction_field === "amount" && intent.new_amount != null
+            ? (intent.match_hint || "").toLowerCase().trim() : "");
+          let handledAsBillOrInstallment = false;
+          if (hint.length >= 4) {
+            const stripA = (s: string) => s.toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "");
+            const h = stripA(hint);
+            const { data: billMatch } = await supabaseAdmin
+              .from("recurring_bills").select("id, title").eq("user_id", profile.id)
+              .order("created_at", { ascending: false }).limit(30);
+            const bill = (billMatch ?? []).find((b: any) => h.includes(stripA(String(b.title || ""))) && String(b.title || "").length >= 4);
+            if (bill) {
+              const r = await actions.applyBillInstallmentFollowUp(profile.id, bill.id, { amount: intent.new_amount });
+              if (r.ok) { replyText = r.replyText; handledAsBillOrInstallment = true; }
+            }
+            if (!handledAsBillOrInstallment) {
+              const { data: instMatch } = await supabaseAdmin
+                .from("installment_purchases").select("id, title").eq("user_id", profile.id)
+                .order("created_at", { ascending: false }).limit(30);
+              const inst = (instMatch ?? []).find((b: any) => h.includes(stripA(String(b.title || ""))) && String(b.title || "").length >= 4);
+              if (inst) {
+                const r = await actions.applyInstallmentFollowUp(profile.id, inst.id, { amount: intent.new_amount });
+                if (r.ok) { replyText = r.replyText; handledAsBillOrInstallment = true; }
+              }
+            }
+          }
+          if (!handledAsBillOrInstallment) {
+            const r = await actions.correctLastTransaction(profile.id, {
+              correction_field: intent.correction_field, new_amount: intent.new_amount,
+              new_category: intent.new_category, new_description: intent.new_description,
+              new_payment_method: intent.new_payment_method, match_hint: intent.match_hint,
+            });
+            replyText = r.replyText;
+          }
+          break;
         }
         case "bulk": {
           const bulkSource = inputText || intent.extracted_text || imageCaption || "";
@@ -3179,7 +3214,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
                 phone, name: profile.name ?? null,
                 pending_action: {
                   kind: "installment_draft",
-                  draft: { title, amount, installments_total: total, installments_paid: intent.installments_paid, total_amount: totalAmount },
+                  draft: { title, amount, installments_total: total, installments_paid: intent.installments_paid, total_amount: totalAmount, due_day: intent.due_day, next_due_at: intent.next_due_at },
                   missing,
                   expires_at: expiresIn5min(),
                 } as any,
@@ -3198,6 +3233,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
 
           const instRes = await actions.recordInstallment(profile.id, {
             title, amount, installments_total: total, installments_paid: intent.installments_paid, total_amount: totalAmount,
+            due_day: intent.due_day, next_due_at: intent.next_due_at,
           });
           replyText = instRes.replyText;
           if (instRes.ok && instRes.row) {

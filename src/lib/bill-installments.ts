@@ -97,14 +97,15 @@ export function parsePaymentDay(raw: string): number | null {
 }
 
 /**
- * Valor corrigido citado com um VERBO EXPLÍCITO de correção — nunca um valor
- * solto (isso ficaria ambíguo com um lançamento novo). "Corrige pra 850",
- * "valor de cada parcela é 850", "muda o valor pra 1200", "na verdade é 90".
+ * Valor corrigido/atualizado citado com um VERBO EXPLÍCITO — nunca um valor
+ * solto (isso ficaria ambíguo com um lançamento novo). Cobre tanto correção
+ * de erro ("corrige pra 850", "na verdade é 90") quanto mudança real de valor
+ * ("aluguel aumentou pra 1300", "internet agora custa 130", "netflix ficou em 59,90").
  */
 export function parseCorrectedAmount(raw: string): number | null {
   const t = norm(raw);
   const m = t.match(
-    /\b(?:corrige(?:\s+(?:o\s+)?valor)?|valor\s+(?:certo|correto|de\s+cada\s+parcela)|muda(?:r)?\s+(?:o\s+)?valor|troca(?:r)?\s+(?:o\s+)?valor|na\s+verdade\s+(?:e|sao|eh))\s*(?:pra|para|e|eh|de)?\s*(?:r\$)?\s*(\d{1,7}(?:[.,]\d{2})?)\b/,
+    /\b(?:corrige(?:\s+(?:o\s+)?valor)?|valor\s+(?:certo|correto|de\s+cada\s+parcela)|muda(?:r)?\s+(?:o\s+)?valor|troca(?:r)?\s+(?:o\s+)?valor|na\s+verdade\s+(?:e|sao|eh)|aumentou|subiu|reajustou|ficou\s+em|agora\s+(?:e|eh|custa|esta|ta))\s*(?:pra|para|e|eh|de|em)?\s*(?:r\$)?\s*(\d{1,7}(?:[.,]\d{2})?)\b/,
   );
   if (!m) return null;
   const n = Number(m[1].replace(",", "."));
