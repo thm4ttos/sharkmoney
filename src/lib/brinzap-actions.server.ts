@@ -2621,6 +2621,11 @@ export async function queryInstallments(userId: string): Promise<{ replyText: st
   if (list.length === 0 && billList.length === 0) {
     return { replyText: "📭 Você não possui parcelamentos cadastrados.\n\n➕ Ex.: _Notebook 12x de R$ 250_", items: [] };
   }
+  // installment_purchases só guarda first_due_at (a data da 1ª parcela, fixa)
+  // — o vencimento da PRÓXIMA parcela precisa ser derivado somando os meses
+  // já pagos, senão volta a mostrar a 1ª parcela pra sempre mesmo depois de
+  // pagar várias. Mesma fórmula que o site já usa (installments.functions.ts).
+  const { installmentDueDate } = await import("@/lib/installments-dates");
   const items: InstallmentListItem[] = [];
   const lines: string[] = [];
   let n = 0;
@@ -2631,7 +2636,8 @@ export async function queryInstallments(userId: string): Promise<{ replyText: st
     const paid = Number(i.installments_paid || 0);
     const per = total > 0 ? Number(i.total_amount || 0) / total : 0;
     const rem = Math.max(0, total - paid) * per;
-    lines.push(`${n} - *${i.title}* — ${paid}/${total} pagas\n${BRL(per)}/parcela · restante ${BRL(rem)} · próx. ${formatYMDBr(String(i.first_due_at ?? "").slice(0, 10))}`);
+    const nextDue = paid >= total || !i.first_due_at ? null : installmentDueDate(String(i.first_due_at), paid + 1);
+    lines.push(`${n} - *${i.title}* — ${paid}/${total} pagas\n${BRL(per)}/parcela · restante ${BRL(rem)}${nextDue ? ` · próx. ${formatYMDBr(nextDue)}` : ""}`);
   }
   // Contas fixas com prazo determinado (consórcio, financiamento) também são parcelamentos.
   for (const b of billList.slice(0, 15)) {
