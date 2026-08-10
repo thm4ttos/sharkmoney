@@ -2703,6 +2703,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         "query_balance","query_summary","query_finance_report","query_appointments",
         "query_bills","query_installments","query_debts","query_goals","query_habits",
         "query_transactions","query_profile","update_profile","query_help","open_dashboard",
+        "create_credit_card","query_credit_card",
         "confirm_yes","confirm_no","financial_validation_error",
       ]);
       if (intent && !imageUrl && !REGISTRABLE.has(intent.kind)) {
@@ -2934,6 +2935,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
             amount: intent.amount, category: intent.category,
              description: intent.description ?? normalizedCaption ?? (inputText || "Gasto avulso"),
              occurred_at: intent.occurred_at ?? row.created_at,
+             credit_card_hint: intent.credit_card_hint,
           });
           savedTxId = saved.row?.id ?? null;
           // REGRA DE OURO: nunca confirmar sem persistência confirmada no banco.
@@ -3078,6 +3080,18 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
           const field = intent.profile_field ?? "income";
           const value = field === "income" ? Number(intent.profile_value) : (intent.profile_value ?? "");
           replyText = (await updateProfileField(profile.id, field, value)).replyText;
+          break;
+        }
+        case "create_credit_card": {
+          const r = await actions.createCreditCard(profile.id, {
+            name: intent.title ?? intent.description, closing_day: intent.closing_day, due_day: intent.due_day,
+          });
+          replyText = r.replyText;
+          break;
+        }
+        case "query_credit_card": {
+          const r = await actions.queryCreditCardInvoice(profile.id, intent.credit_card_hint);
+          replyText = r.replyText;
           break;
         }
         case "query_help": replyText = actions.helpMessage(profile.name ?? undefined); break;

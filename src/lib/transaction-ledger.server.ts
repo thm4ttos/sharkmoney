@@ -22,6 +22,8 @@ export type TransactionWriteInput = {
   sourceId?: string | null;
   /** Canal que originou a operação: whatsapp | site | import | api */
   channel?: "whatsapp" | "site" | "import" | "api" | null;
+  /** Cartão de crédito ao qual a despesa foi debitada (opcional). */
+  creditCardId?: string | null;
 };
 
 export type PersistedTransaction = {
@@ -38,6 +40,7 @@ export type PersistedTransaction = {
   source_type: string | null;
   source_id: string | null;
   channel: string | null;
+  credit_card_id: string | null;
 };
 
 type DataClient = SupabaseClient<Database>;
@@ -83,7 +86,8 @@ function assertPersisted(row: PersistedTransaction, input: TransactionWriteInput
     sameNullable(row.import_batch_id, input.importBatchId) &&
     sameNullable(row.source_type, input.sourceType) &&
     sameNullable(row.source_id, input.sourceId) &&
-    sameNullable(row.channel, input.channel);
+    sameNullable(row.channel, input.channel) &&
+    sameNullable(row.credit_card_id, input.creditCardId);
 
   if (!valid) throw new Error("TRANSACTION_PERSISTENCE_MISMATCH");
 }
@@ -121,6 +125,7 @@ export async function writeVerifiedTransaction(
     source_type: input.sourceType ?? defaultSourceType(input.source),
     source_id: input.sourceId ?? input.sourceMessageId ?? input.importBatchId ?? null,
     channel: input.channel ?? defaultChannel(input.source),
+    credit_card_id: input.creditCardId ?? null,
   };
   audit("2_payload_ready", { occurred_at: payload.occurred_at, amount: payload.amount });
 
@@ -128,7 +133,7 @@ export async function writeVerifiedTransaction(
     .from("transactions")
     .insert(payload)
     .select(
-      "id, user_id, kind, amount, category, description, occurred_at, source, source_message_id, import_batch_id, source_type, source_id, channel",
+      "id, user_id, kind, amount, category, description, occurred_at, source, source_message_id, import_batch_id, source_type, source_id, channel, credit_card_id",
     )
     .single();
 

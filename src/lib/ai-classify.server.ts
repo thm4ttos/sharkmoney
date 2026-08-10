@@ -33,6 +33,8 @@ export type IntentKind =
   | "query_transactions"
   | "query_profile"
   | "update_profile"
+  | "create_credit_card"
+  | "query_credit_card"
   | "query_help"
   | "open_dashboard"
   | "reset_data"
@@ -66,6 +68,10 @@ export type ClassifyItem = {
   match_hint?: string;
   profile_field?: "income" | "payday" | "profession" | "goal";
   profile_value?: string;
+  /** Dia de fechamento de um cartão de crédito (1-31), só em create_credit_card. */
+  closing_day?: number;
+  /** Nome do cartão citado numa despesa ("no cartão Nubank") ou numa consulta de fatura. Vazio = cartão sem nome/padrão. */
+  credit_card_hint?: string;
 };
 
 export type ClassifyResult = ClassifyItem & {
@@ -186,7 +192,9 @@ const ITEM_FIELDS = {
   creditor: { type: "string" },
   target_amount: { type: "number" },
   target_date: { type: "string" },
-  due_day: { type: "number", description: "Dia do mês do vencimento de uma conta fixa (1-31). Extraia de frases como 'vence dia 10', 'todo dia 10', 'mensalmente dia 5'." },
+  due_day: { type: "number", description: "Dia do mês do vencimento de uma conta fixa, parcelamento ou fatura de cartão (1-31). Extraia de frases como 'vence dia 10', 'todo dia 10', 'mensalmente dia 5'." },
+  closing_day: { type: "number", description: "Dia do mês em que a fatura do cartão FECHA (1-31), só quando kind=create_credit_card. Ex.: 'fecha dia 3' → closing_day=3." },
+  credit_card_hint: { type: "string", description: "Nome do cartão citado numa despesa ('no cartão Nubank', 'no crédito do Inter') ou numa consulta de fatura ('minha fatura do Nubank'). Deixe vazio se o usuário só disse 'no cartão'/'no crédito' sem nome — o sistema usa o cartão padrão." },
 } as const;
 
 const ITEM_KIND_ENUM = ["expense", "income", "appointment", "bill", "installment", "debt", "goal"] as const;
@@ -209,6 +217,7 @@ const TOOL = {
           "query_bills", "query_installments", "query_debts",
           "query_goals", "query_habits", "query_transactions",
           "query_profile", "update_profile",
+          "create_credit_card", "query_credit_card",
           "query_help", "open_dashboard",
           "reset_data",
           "clarify",
@@ -293,6 +302,9 @@ Consultas/comandos:
 - query_transactions: histórico de lançamentos, receitas ou despesas específicas ("minhas receitas", "minhas despesas", "últimos gastos", "histórico").
 - query_profile: pergunta sobre um DADO DE PERFIL que o próprio Abio coletou no onboarding (renda mensal, dia que recebe, profissão, objetivo financeiro) — NUNCA sobre movimentações. "Qual minha renda mensal?", "quanto eu disse que ganho?", "que dia eu recebo?", "qual meu objetivo?", "qual profissão eu cadastrei?" → kind="query_profile" + profile_field. ⚠️ Isso é diferente de "quanto recebi esse mês?" (query_transactions/query_summary — pergunta sobre dinheiro que ENTROU de verdade).
 - update_profile: o usuário está CORRIGINDO ou ATUALIZANDO um dado de perfil (não relatando uma movimentação). Sinais: "minha renda é/está X", "corrige minha renda para X", "na verdade eu ganho X", "atualiza meu salário para X", "não ganho X, ganho Y", "meu objetivo agora é X", "agora recebo todo dia X", "não sou mais [profissão], agora sou [profissão]" → kind="update_profile" + profile_field + profile_value. ⚠️ NUNCA confundir com kind="income": "recebi X hoje/ontem/agora" ou "caiu X na conta" = dinheiro que efetivamente entrou (kind="income", cria receita real). "Minha renda é X" ou "ganho X por mês" (sem verbo de recebimento pontual) = dado de planejamento (kind="update_profile"), NUNCA cria receita nem mexe no saldo.
+- create_credit_card: usuário quer CADASTRAR um cartão de crédito (não uma despesa nele). Sinais: "cadastra meu cartão X", "adiciona o cartão X", "tenho um cartão X que fecha dia Y e vence dia Z". Precisa de nome (title), dia de fechamento (closing_day) e dia de vencimento (due_day). Se faltar qualquer um dos três, use confidence baixo (<0.80) em vez de inventar — o sistema pergunta só o que falta.
+- query_credit_card: usuário quer saber o valor/vencimento da FATURA (não quer registrar nada). "Qual minha fatura?", "quanto tá o Nubank?", "quanto fechou o cartão?", "quando vence minha fatura?", "fatura do Inter" → kind="query_credit_card" + credit_card_hint (nome do cartão, se citado).
+⚠️ Despesa NO CARTÃO: "gastei 300 no cartão Nubank", "passei 120 no Inter", "comprei 500 no crédito" → continua kind="expense" normalmente (ou item de bulk), só ACRESCENTE credit_card_hint com o nome citado ("Nubank"/"Inter") ou deixe vazio se só disse "no cartão"/"no crédito" sem nome — NUNCA vire create_credit_card nem query_credit_card por causa disso.
 - query_help
 - open_dashboard: usuário pediu para acessar sua conta, painel, dashboard, gráficos, histórico, relatórios ou o site do Abio. Exemplos: "quero entrar na minha conta", "como acesso meu painel?", "me manda o link do Abio", "quero ver meus gráficos", "quero abrir meu dashboard", "quero consultar meu saldo no site", "como entro no sistema?", "abrir meu Abio", "qual é o site?".
 - reset_data: "zerar histórico", "apagar tudo"

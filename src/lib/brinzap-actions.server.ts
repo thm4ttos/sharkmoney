@@ -232,7 +232,7 @@ async function logDuplicate(opts: {
 
 export async function recordExpense(
   userId: string,
-  input: { amount?: number; category?: string; description?: string; occurred_at?: string },
+  input: { amount?: number; category?: string; description?: string; occurred_at?: string; credit_card_hint?: string | null },
 ): Promise<{ replyText: string; ok: boolean; row?: PersistedTransaction; duplicate?: boolean }> {
   const parsed = ExpenseSchema.safeParse(input);
   if (!parsed.success) {
@@ -250,6 +250,16 @@ export async function recordExpense(
     return { ok: true, duplicate: true, replyText: "Esse lançamento já foi registrado." };
   }
 
+  // "no cartão X" / "no crédito" — vincula a despesa à fatura certa sem
+  // precisar de uma etapa separada. Sem hint nenhum e mais de um cartão
+  // cadastrado, não adivinha: fica sem cartão (o usuário sempre pode contar
+  // depois via correção).
+  let creditCardId: string | null = null;
+  if (input.credit_card_hint) {
+    const card = await findCreditCardByHint(userId, input.credit_card_hint);
+    if (card) creditCardId = card.id;
+  }
+
   const currentSourceMessageId = getCurrentSourceMessageId();
   let row: PersistedTransaction;
   try {
@@ -258,6 +268,7 @@ export async function recordExpense(
       description: data.description ?? null,
       occurredAt: data.occurred_at ?? new Date().toISOString(),
       source: "whatsapp", sourceMessageId: currentSourceMessageId,
+      creditCardId,
     });
   } catch (error: any) {
     if (isUniqueSourceMessageViolation(error)) {
@@ -1444,6 +1455,97 @@ export async function applyInstallmentFollowUp(
   return { ok: true, replyText: `✅ Atualizei!\n\n${installmentCardText(saved)}` };
 }
 
+// ===== Credit Cards =====
+// A fatura NUNCA é armazenada à parte — é sempre computada ao vivo (soma das
+// despesas com credit_card_id preenchido, dentro do ciclo de fechamento
+// atual), o mesmo padrão de getMonthBalance.
+
+function spToday(): { y: number; m: number; d: number } {
+  const f = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const g = (t: string) => Number(f.find((p) => p.type === t)?.value ?? 0);
+  return { y: g("year"), m: g("month"), d: g("day") };
+}
+function clampDayInMonth(y: number, m: number, day: number): number {
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return Math.min(Math.max(1, day), last);
+}
+function ymd(y: number, m: number, d: number): string {
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Ciclo da fatura ABERTA agora: transações após cycleStart e até cycleEnd (inclusive) pertencem a ela. */
+function currentInvoiceCycle(closingDay: number): { cycleStart: string; cycleEnd: string } {
+  const { y, m, d } = spToday();
+  let ny = y, nm = m;
+  if (d > closingDay) { nm += 1; if (nm > 12) { nm = 1; ny += 1; } }
+  const cycleEnd = ymd(ny, nm, clampDayInMonth(ny, nm, closingDay));
+  let py = ny, pm = nm - 1;
+  if (pm < 1) { pm = 12; py -= 1; }
+  const cycleStart = ymd(py, pm, clampDayInMonth(py, pm, closingDay));
+  return { cycleStart, cycleEnd };
+}
+
+export async function createCreditCard(
+  userId: string,
+  input: { name?: string; closing_day?: number; due_day?: number; is_default?: boolean },
+): Promise<{ ok: boolean; replyText: string; row?: { id: string } }> {
+  const name = (input.name || "").trim();
+  const closingDay = Number(input.closing_day);
+  const dueDay = Number(input.due_day);
+  if (!name || !(closingDay >= 1 && closingDay <= 31) || !(dueDay >= 1 && dueDay <= 31)) {
+    return { ok: false, replyText: "Não captei os dados do cartão. Me diz o nome, o dia de fechamento e o dia de vencimento (ex.: _Nubank, fecha dia 3, vence dia 10_)." };
+  }
+  const { data: existing } = await supabaseAdmin
+    .from("credit_cards" as any).select("id").eq("user_id", userId).eq("active", true);
+  const isFirst = !existing || existing.length === 0;
+  if (input.is_default || isFirst) {
+    await supabaseAdmin.from("credit_cards" as any).update({ is_default: false }).eq("user_id", userId);
+  }
+  const { data: created, error } = await supabaseAdmin.from("credit_cards" as any).insert({
+    user_id: userId, name, closing_day: closingDay, due_day: dueDay, is_default: input.is_default || isFirst,
+  } as any).select("id").single();
+  if (error || !created) { console.error("[actions] createCreditCard", error); return { ok: false, replyText: "Não consegui cadastrar o cartão 🙏." }; }
+  return {
+    ok: true,
+    row: { id: (created as any).id },
+    replyText: `💳 Cartão *${name}* cadastrado!\n📆 Fecha todo dia *${closingDay}*, vence dia *${dueDay}*.\n\nAgora é só falar "no cartão ${name}" numa despesa que eu já vinculo à fatura.`,
+  };
+}
+
+/** Resolve "cartão X" / "no crédito" (sem nome) pro cartão certo do usuário. */
+export async function findCreditCardByHint(userId: string, hint?: string | null): Promise<{ id: string; name: string; closing_day: number; due_day: number } | null> {
+  const { data } = await supabaseAdmin
+    .from("credit_cards" as any).select("id, name, closing_day, due_day, is_default")
+    .eq("user_id", userId).eq("active", true);
+  const list = (data ?? []) as any[];
+  if (list.length === 0) return null;
+  const term = (hint || "").toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "").trim();
+  if (term.length >= 3) {
+    const byName = list.find((c) => term.includes(String(c.name || "").toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "")));
+    if (byName) return byName;
+  }
+  if (list.length === 1) return list[0];
+  return list.find((c) => c.is_default) ?? null;
+}
+
+export async function queryCreditCardInvoice(userId: string, hint?: string | null): Promise<{ replyText: string }> {
+  const card = await findCreditCardByHint(userId, hint);
+  if (!card) {
+    const { data } = await supabaseAdmin.from("credit_cards" as any).select("id").eq("user_id", userId).eq("active", true).limit(1);
+    if (!data || data.length === 0) return { replyText: "Você ainda não tem nenhum cartão cadastrado. Me diz o nome, o dia de fechamento e o dia de vencimento que eu cadastro." };
+    return { replyText: "Você tem mais de um cartão — de qual você quer a fatura?" };
+  }
+  const { cycleStart, cycleEnd } = currentInvoiceCycle(card.closing_day);
+  const { data: txs } = await supabaseAdmin
+    .from("transactions").select("amount")
+    .eq("user_id", userId).eq("kind", "expense").eq("credit_card_id" as any, card.id)
+    .gt("occurred_at", `${cycleStart}T00:00:00-03:00`).lte("occurred_at", `${cycleEnd}T23:59:59-03:00`);
+  const total = (txs ?? []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+  return {
+    replyText: `💳 *${card.name}*\n💰 Fatura atual: *${BRL(total)}*\n📆 Fecha dia *${card.closing_day}* — vence dia *${card.due_day}*`,
+  };
+}
+
 // ===== Debt =====
 export async function recordDebt(
   userId: string,
@@ -2248,7 +2350,7 @@ export async function processBulk(
           const category = inferred !== "Outros"
             ? inferred
             : ((CATEGORIES as readonly string[]).includes(it.category ?? "") ? it.category! : "Outros");
-          const r = await recordExpense(userId, { amount: it.amount, category, description: it.description ?? it.title, occurred_at: it.occurred_at });
+          const r = await recordExpense(userId, { amount: it.amount, category, description: it.description ?? it.title, occurred_at: it.occurred_at, credit_card_hint: it.credit_card_hint });
           if (r.duplicate) { /* dup: ignora silenciosamente */ }
           else if (r.ok && r.row) created.push({ kind: "expense", category: r.row.category, amount: Number(r.row.amount), title: r.row.description ?? undefined });
           else failed++;
