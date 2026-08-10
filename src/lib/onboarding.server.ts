@@ -3,6 +3,7 @@
 // Persistência em public.onboarding_progress (answers JSONB).
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { parseMoneyAmount } from "@/lib/money-speech";
 
 type Step =
   | "invite"
@@ -44,18 +45,12 @@ const NEXT: Record<Step, Step | null> = {
 const YES = /^(s|sim|claro|isso|com certeza|quero|vamos|bora|👍|✅|configurar|1️⃣|^1$)/i;
 const NO = /^(n|nao|não|depois|agora não|2️⃣|^2$|pular|skip|nem)/i;
 
+// Delega ao parser monetário canônico (src/lib/money-speech.ts), que já faz
+// a normalização de fala (extenso, "mil"/"k", reais+centavos) antes de
+// extrair o número — não é mais dependente da ordem do pipeline em
+// wa-processor.server.ts pra reconhecer "20mil" corretamente.
 function parseMoney(input: string): number | null {
-  if (!input) return null;
-  const t = input.toLowerCase().replace(/\s+/g, " ").trim();
-  // Tentativa direta com R$ ou números
-  const m = t.match(/(?:r\$?\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/);
-  if (m) {
-    let s = m[1];
-    if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
-    const n = parseFloat(s);
-    if (!isNaN(n) && n > 0) return n;
-  }
-  return null;
+  return parseMoneyAmount(input);
 }
 
 function questionFor(step: Step, answers: any, name?: string): string {

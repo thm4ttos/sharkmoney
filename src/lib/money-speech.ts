@@ -202,6 +202,53 @@ export function ptNumberWordsToDigits(text: string): string {
 const CURRENCY_WORD = String.raw`reais?|real|contos?|conto|pila|paus|mangos?`;
 
 /**
+ * Formato de um token monetário já normalizado (dígitos, com "." como
+ * separador de milhar e "," como decimal — padrão BR). Compartilhado entre
+ * todo call site que precisa reconhecer "onde está o valor" num texto —
+ * evita reimplementar a mesma regex frágil em cada arquivo (bug real: a
+ * versão antiga com `(?:\.\d{3})*` + `\d{1,3}` bound truncava "1200,50" em
+ * "120" porque o grupo de milhar era opcional e o dígito solto tinha limite
+ * de 3 casas).
+ */
+export const MONEY_TOKEN_PATTERN = String.raw`\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:,\d{1,2})?`;
+
+/**
+ * Converte um token já isolado ("1.200,50", "1200,50", "37,25", "20000")
+ * para número decimal, tratando corretamente ponto de milhar vs. vírgula
+ * decimal. Não faz normalização de fala — use `parseMoneyAmount` para isso.
+ */
+export function parseMoneyToken(rawToken: string): number | null {
+  const clean = (rawToken ?? "").trim();
+  if (!clean) return null;
+  const hasComma = clean.includes(",");
+  const hasDot = clean.includes(".");
+  let normalized = clean;
+  if (hasComma && hasDot) normalized = clean.replace(/\./g, "").replace(",", ".");
+  else if (hasComma) normalized = clean.replace(",", ".");
+  else if (hasDot && (clean.split(".").pop() ?? "").length === 3) normalized = clean.replace(/\./g, "");
+  const n = Number(normalized);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Parser monetário CANÔNICO — ponto único de verdade para "texto em
+ * português (falado ou digitado) → valor decimal". Roda a normalização de
+ * fala (extenso, "mil"/"k", reais+centavos) antes de extrair o número, então
+ * é seguro chamar diretamente sobre a frase crua do usuário em qualquer
+ * lugar do app, sem depender de alguma outra etapa já ter normalizado o
+ * texto antes (bug real: "20mil" virava R$201.000,00 num call site que não
+ * tinha essa normalização — o fix funcionava só por sorte de ordem do
+ * pipeline em outro arquivo).
+ */
+export function parseMoneyAmount(raw: string): number | null {
+  if (!raw) return null;
+  const spoken = normalizeSpokenMoney(raw);
+  const m = spoken.match(new RegExp(String.raw`(?:r\$\s*)?(${MONEY_TOKEN_PATTERN})`, "i"));
+  if (!m) return null;
+  return parseMoneyToken(m[1]);
+}
+
+/**
  * Normaliza valores monetários falados/escritos para um único decimal.
  * Idempotente e seguro para textos que não contenham valores.
  */

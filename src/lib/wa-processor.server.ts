@@ -13,6 +13,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { normalizePhone, phoneLookupVariants } from "@/lib/phone";
 import { extractWhatsappMedia } from "@/lib/wa-media";
+import { parseMoneyAmount } from "@/lib/money-speech";
 
 /** Formata data/hora de compromisso em pt-BR (fuso de São Paulo). */
 function prettyApptDate(iso: string): string {
@@ -737,15 +738,10 @@ export async function processInboundMessage(messageId: string): Promise<ProcessR
 }
 
 // Valor citado pelo usuário na legenda/mensagem (para checar divergência com o PDF).
+// Delega ao parser monetário canônico — mesma normalização de fala usada em
+// todo o resto do app (ver src/lib/money-speech.ts).
 function extractCaptionAmount(text: string): number | null {
-  const t = (text ?? "").toLowerCase();
-  const m = t.match(/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:[.,]\d{1,2})?)\s*(?:reais|conto|pila)?/);
-  if (!m) return null;
-  let raw = m[1];
-  if (raw.includes(".") && raw.includes(",")) raw = raw.replace(/\./g, "").replace(",", ".");
-  else if (raw.includes(",")) raw = raw.replace(",", ".");
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return parseMoneyAmount(text ?? "");
 }
 
 function formatMoneyBR(n: number): string {

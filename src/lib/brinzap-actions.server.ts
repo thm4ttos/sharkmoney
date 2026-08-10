@@ -7,7 +7,7 @@ import { extractDateHintSP, stripDateHint } from "./datetime";
 import { writeVerifiedTransaction, type PersistedTransaction } from "./transaction-ledger.server";
 import { pickReply, pickReplySync, maybeDashboardLink } from "./wa-replies";
 import { billInstallmentInfo, nextDueFromDaySP, formatYMDBr, type BillInstallmentPatch } from "./bill-installments";
-import { ptNumberWordsToDigits } from "@/lib/money-speech";
+import { ptNumberWordsToDigits, parseMoneyAmount, parseMoneyToken, MONEY_TOKEN_PATTERN } from "@/lib/money-speech";
 
 
 // Lookup rápido do phone do usuário para variar respostas sem repetir.
@@ -1760,7 +1760,12 @@ type SmartFinancialParse =
   | { ok: true; items: BulkFinancialItem[] }
   | { ok: false; replyText: string; reason: "divergence" | "missing_unit" | "ambiguous" };
 
-const MONEY_NUMBER = String.raw`\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?`;
+// Mesmo padrão usado em todo o app (src/lib/money-speech.ts) — antes esta
+// cópia local usava `*` em vez de `+` no grupo de milhar e permitia ponto OU
+// vírgula como decimal solto, o que truncava valores sem separador de
+// milhar: "1200,50" virava só "120" (o `\d{1,3}` bounded casava e parava
+// aí, já que o resto da alternativa era opcional).
+const MONEY_NUMBER = MONEY_TOKEN_PATTERN;
 const MONEY_RE_GLOBAL = new RegExp(String.raw`(?:r\$\s*)?(${MONEY_NUMBER})(?:\s*(?:reais?|conto|pila))?`, "gi");
 const INCOME_LINE_RE = /\b(recebi|ganhei|entrou|caiu|sal[áa]rio|freela|pix recebido)\b/i;
 const HEADER_LINE_RE = /^[^0-9R$]+:\s*$/;
@@ -1783,15 +1788,7 @@ function verbNounFrom(text: string): { noun: string; category?: string } | null 
 
 function parseMoneyBRL(raw: string): number | null {
   const clean = raw.replace(/r\$/gi, "").replace(/\b(reais?|conto|pila)\b/gi, "").replace(/\s/g, "").trim();
-  if (!clean) return null;
-  const hasComma = clean.includes(",");
-  const hasDot = clean.includes(".");
-  let normalized = clean;
-  if (hasComma && hasDot) normalized = clean.replace(/\./g, "").replace(",", ".");
-  else if (hasComma) normalized = clean.replace(",", ".");
-  else if (hasDot && (clean.split(".").pop() ?? "").length === 3) normalized = clean.replace(/\./g, "");
-  const n = Number(normalized);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return parseMoneyToken(clean);
 }
 
 export function moneyMatches(text: string): Array<{ amount: number; raw: string; start: number; end: number }> {
@@ -2759,12 +2756,11 @@ export async function queryTransactions(
 // Pagamento PARCIAL de contas fixas
 // ===============================================================
 
+// Delega ao parser canônico (money-speech.ts) — cobre extenso/"mil"/"k"
+// além de dígitos, ao contrário da versão anterior que só normalizava
+// separadores de milhar/decimal.
 function parseBrlAmountLoose(s: string): number | null {
-  if (!s) return null;
-  const cleaned = s.replace(/\s+/g, "").replace(/r\$/i, "");
-  const noThousands = cleaned.replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
-  const n = Number(noThousands);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return parseMoneyAmount(s);
 }
 
 /** Detecta pagamento parcial / atualização de saldo de uma conta existente.
