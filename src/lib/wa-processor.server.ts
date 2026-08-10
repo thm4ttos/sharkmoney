@@ -918,24 +918,48 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     const YES_RE = /^(s|sim|claro|isso|isso mesmo|com certeza|tenho certeza|confirmar|confirmo|confirma|pode|pode apagar|pode ser|pode sim|ok|okay|👍|✅|sim,?\s*(apagar|apaga|excluir|deletar|zerar|pode)( tudo)?|apagar tudo|apaga tudo|excluir tudo|zerar tudo|manda ver|vai|bora)$/i;
     const NO_RE = /^(n|nao|não|cancelar|cancela|deixa|deixa assim|desconsidera|desconsiderar|esquece|nada|para|pare|negativo|❌)$/i;
 
-    // ⚠️ Guarda compartilhada contra "roubo de assunto": vários fluxos
-    // determinísticos (agenda, edição da última transação, etc.) tentam
-    // resolver um alvo "mais recente"/"ativo" quando a frase não especifica
-    // um claramente — e bugs reais em produção mostraram isso roubando
-    // mensagens que na verdade eram sobre um parcelamento/conta fixa
-    // ("Compra parcelada mudar pro dia 5" mexeu numa transação de gás sem
-    // relação; "trocar data da compra parcelada pro dia 02/01" remarcou um
-    // compromisso de corte de cabelo). Uma frase que claramente fala de
-    // parcelamento/conta fixa/consórcio, ou referencia numericamente a
-    // lista de parcelamentos que acabou de ser mostrada, NUNCA pode ser
-    // resolvida por um fluxo de outro módulo (agenda, transação avulsa) —
-    // só quem entende de parcelamento/conta decide o que fazer com ela.
-    const looksLikeModuleReference =
-      /\b(parcela|parcelas|parcelamento|parcelamentos|parcelad[ao]s?|cons[óo]rcio|conta\s+fixa)\b/i.test(inputText) ||
-      (!!lastCtx?.installments_list?.length && (
-        /^\s*\d{1,2}\b/.test(normalized) ||
-        /\b(?:o|a|item|numero|n[úu]mero)\s+\d{1,2}\b/i.test(normalized)
-      ));
+    // ⚠️ Guarda compartilhada contra "roubo de assunto" (generalizada —
+    // antes só cobria parcelamento/conta fixa). Vários fluxos determinísticos
+    // (agenda, edição da última transação, etc.) tentam resolver um alvo
+    // "mais recente"/"ativo" quando a frase não especifica um claramente —
+    // e bugs reais em produção mostraram isso roubando mensagens que na
+    // verdade eram sobre OUTRO módulo ("Compra parcelada mudar pro dia 5"
+    // mexeu numa transação de gás sem relação; "trocar data da compra
+    // parcelada pro dia 02/01" remarcou um compromisso de corte de cabelo
+    // sem relação nenhuma). A mesma classe de bug pode acontecer com
+    // compromisso/dívida/meta mencionados de forma explícita — por isso o
+    // reconhecimento cobre todos os módulos, não só parcelamento/conta.
+    // Regra de ouro: se a frase claramente fala de um módulo específico,
+    // SÓ quem entende daquele módulo decide o que fazer com ela — nunca
+    // "a última transação"/"o único compromisso ativo" por padrão.
+    type ExplicitModuleRef = "installment_or_bill" | "appointment" | "debt" | "goal";
+    const explicitModuleRef: ExplicitModuleRef | null = (() => {
+      if (/\b(parcela|parcelas|parcelamento|parcelamentos|parcelad[ao]s?|cons[óo]rcio|conta\s+fixa)\b/i.test(inputText)) {
+        return "installment_or_bill";
+      }
+      if (/\b(compromisso|compromissos|lembrete|lembretes|agenda|evento|eventos|reuni[ãa]o|reuni[õo]es|consulta|consultas|encontro|encontros)\b/i.test(inputText)) {
+        return "appointment";
+      }
+      if (/\b(d[íi]vida|d[íi]vidas|empr[ée]stimo|empr[ée]stimos)\b/i.test(inputText)) {
+        return "debt";
+      }
+      if (/\b(meta|metas)\b/i.test(inputText)) {
+        return "goal";
+      }
+      if (
+        lastCtx?.installments_list?.length &&
+        (/^\s*\d{1,2}\b/.test(normalized) || /\b(?:o|a|item|numero|n[úu]mero)\s+\d{1,2}\b/i.test(normalized))
+      ) {
+        return "installment_or_bill";
+      }
+      return null;
+    })();
+    // Usado pelos detectores de EDIÇÃO DE TRANSAÇÃO (transactions não é
+    // nenhum desses 4 módulos, então qualquer referência explícita exclui).
+    const looksLikeModuleReference = explicitModuleRef !== null;
+    // Usado pelo FLUXO DE AGENDA (que é, ele mesmo, o módulo "appointment" —
+    // só se exclui quando a frase fala claramente de outro módulo).
+    const looksLikeOtherModuleThanAppointment = explicitModuleRef !== null && explicitModuleRef !== "appointment";
 
     // ===== ONBOARDING =====
     if (!imageUrl) {
@@ -1323,10 +1347,12 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       // ⚠️ Bug real: "trocar data da compra parcelada pro dia 02/01/2027"
       // batia com "trocar...data" (comando de reagendar) e, sem alvo
       // explícito, caía no único compromisso ativo do usuário — remarcando
-      // algo completamente sem relação. looksLikeModuleReference bloqueia
-      // esse ramo inteiro quando a frase é claramente sobre parcelamento/
-      // conta fixa: quem resolve isso é o bloco de parcelamentos, não a agenda.
-      else if (!handled && !looksLikeModuleReference && (cmd || (pending && pending.kind === "appointment_reschedule"))) {
+      // algo completamente sem relação. looksLikeOtherModuleThanAppointment
+      // bloqueia esse ramo inteiro quando a frase é claramente sobre
+      // parcelamento/conta/dívida/meta: quem resolve isso é o módulo
+      // correspondente, não a agenda (mas uma frase sobre "compromisso" em
+      // si não bloqueia — é exatamente o que este ramo trata).
+      else if (!handled && !looksLikeOtherModuleThanAppointment && (cmd || (pending && pending.kind === "appointment_reschedule"))) {
         // Resolve o alvo pelo contexto: pending > último lembrete > único ativo.
         let target: any = null;
         if (pending && (pending.kind === "appointment_confirm" || pending.kind === "appointment_reschedule")) {
@@ -1595,12 +1621,14 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       // gás completamente sem relação, só porque a frase também batia com
       // "mudar" + "dia N". Essas três detecções abaixo (0a/0a-2/0b) falam
       // apenas de TRANSAÇÕES — nunca podem roubar uma frase que claramente é
-      // sobre um parcelamento/conta fixa/consórcio, ou uma referência
-      // numérica à lista que acabou de ser mostrada ("2 vence dia 15",
-      // "corrige o 1 pra R$900"). Nesses casos, quem decide é o bloco de
-      // parcelamentos/contas mais abaixo — nunca "a última transação".
-      // (looksLikeModuleReference já foi calculado mais acima, antes até do
-      // fluxo de agenda — mesma trava vale pros dois.)
+      // sobre QUALQUER outro módulo (parcelamento/conta fixa/consórcio,
+      // compromisso/agenda, dívida, meta), ou uma referência numérica à
+      // lista de parcelamentos que acabou de ser mostrada ("2 vence dia 15",
+      // "corrige o 1 pra R$900"). Nesses casos quem decide é o módulo
+      // correspondente — nunca "a última transação".
+      // (looksLikeModuleReference já foi calculado mais acima, junto com
+      // explicitModuleRef/looksLikeOtherModuleThanAppointment — antes até
+      // do fluxo de agenda — mesma trava vale pros dois.)
 
       // 0a) Edição do lançamento anterior por linguagem natural ("foi ontem",
       //     "muda a data", "isso foi dia 22", "coloca em mercado", "apaga isso").
