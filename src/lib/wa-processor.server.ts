@@ -2032,6 +2032,10 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         const n = m ? parseInt(m[1], 10) : NaN;
         if (n >= 1 && n <= 2000) { draft.installments_total = n; resolved = true; }
         else instReply = "Não captei a quantidade. Pode mandar só o número de parcelas (ex.: *10*)?";
+      } else if (pending.missing === "title") {
+        const t = (inputText || "").trim().replace(/[.!]+$/, "").slice(0, 80);
+        if (t && t.length >= 2) { draft.title = t; resolved = true; }
+        else instReply = "Não captei o nome. Do que é essa compra parcelada?";
       }
 
       if (resolved) {
@@ -3234,10 +3238,11 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
             ? Math.abs(totalAmount - amount * total) <= Math.max(1, totalAmount * 0.02)
             : true;
 
-          const missing: "reconcile" | "amount" | "installments_total" | "confirm" | null =
+          const missing: "reconcile" | "amount" | "installments_total" | "title" | "confirm" | null =
             !reconciles ? "reconcile"
             : !amount ? "amount"
             : !total ? "installments_total"
+            : !title ? "title"
             : (gate === "ask" || gate === "menu") ? "confirm"
             : null;
 
@@ -3260,6 +3265,8 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
               ? `Não consegui confirmar com segurança o valor de cada parcela${title ? ` de *${title}*` : ""}. Qual é?`
               : missing === "installments_total"
               ? `Quantas parcelas são${title ? ` de *${title}*` : ""}?`
+              : missing === "title"
+              ? `Do que é essa compra parcelada (${total}x de ${formatMoneyBR(amount!)})? Me diz o nome do produto/serviço.`
               : `Posso confirmar esse parcelamento?\n\n📝 ${title || "Parcelamento"}\n🔢 ${total} parcelas de ${formatMoneyBR(amount!)} (total ${formatMoneyBR(amount! * total!)})\n\nResponda *sim* pra salvar.`;
             break;
           }
