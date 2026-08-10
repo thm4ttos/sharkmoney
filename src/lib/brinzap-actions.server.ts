@@ -1379,14 +1379,16 @@ export async function recordInstallment(
     first_due_at: firstDueAt,
   }).select("id").single();
   if (error || !created) { console.error("[actions] recordInstallment", error); return { ok: false, replyText: "Não consegui salvar o parcelamento 🙏." }; }
-  const bal = await getMonthBalance(userId);
   const remaining = total - paid;
+  // Parcelamento é um COMPROMISSO, não dinheiro que saiu agora — só a parcela
+  // paga vira despesa de verdade. Por isso a confirmação mostra data e
+  // parcelas, não o saldo do mês (que só muda quando uma parcela é paga).
   return {
     ok: true,
     row: { id: created.id as string },
-    replyText: `💳 Parcelamento *${title}* — ${paid}/${total} pagas (${remaining} restantes), ${BRL(parcel)}/parcela.
-
-💰 Saldo do mês: *${BRL(bal.balance)}*`,
+    replyText: `💳 Parcelamento *${title}* — ${paid}/${total} pagas (${remaining} restantes)
+💰 ${BRL(parcel)}/parcela — total ${BRL(totalAmount)}
+📆 Próximo vencimento: *${formatYMDBr(firstDueAt)}*`,
   };
 }
 
