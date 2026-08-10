@@ -918,6 +918,25 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     const YES_RE = /^(s|sim|claro|isso|isso mesmo|com certeza|tenho certeza|confirmar|confirmo|confirma|pode|pode apagar|pode ser|pode sim|ok|okay|👍|✅|sim,?\s*(apagar|apaga|excluir|deletar|zerar|pode)( tudo)?|apagar tudo|apaga tudo|excluir tudo|zerar tudo|manda ver|vai|bora)$/i;
     const NO_RE = /^(n|nao|não|cancelar|cancela|deixa|deixa assim|desconsidera|desconsiderar|esquece|nada|para|pare|negativo|❌)$/i;
 
+    // ⚠️ Guarda compartilhada contra "roubo de assunto": vários fluxos
+    // determinísticos (agenda, edição da última transação, etc.) tentam
+    // resolver um alvo "mais recente"/"ativo" quando a frase não especifica
+    // um claramente — e bugs reais em produção mostraram isso roubando
+    // mensagens que na verdade eram sobre um parcelamento/conta fixa
+    // ("Compra parcelada mudar pro dia 5" mexeu numa transação de gás sem
+    // relação; "trocar data da compra parcelada pro dia 02/01" remarcou um
+    // compromisso de corte de cabelo). Uma frase que claramente fala de
+    // parcelamento/conta fixa/consórcio, ou referencia numericamente a
+    // lista de parcelamentos que acabou de ser mostrada, NUNCA pode ser
+    // resolvida por um fluxo de outro módulo (agenda, transação avulsa) —
+    // só quem entende de parcelamento/conta decide o que fazer com ela.
+    const looksLikeModuleReference =
+      /\b(parcela|parcelas|parcelamento|parcelamentos|parcelad[ao]s?|cons[óo]rcio|conta\s+fixa)\b/i.test(inputText) ||
+      (!!lastCtx?.installments_list?.length && (
+        /^\s*\d{1,2}\b/.test(normalized) ||
+        /\b(?:o|a|item|numero|n[úu]mero)\s+\d{1,2}\b/i.test(normalized)
+      ));
+
     // ===== ONBOARDING =====
     if (!imageUrl) {
       try {
@@ -1301,7 +1320,13 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         }
       }
       // --- 3) Comando sobre um compromisso EXISTENTE ---
-      else if (!handled && (cmd || (pending && pending.kind === "appointment_reschedule"))) {
+      // ⚠️ Bug real: "trocar data da compra parcelada pro dia 02/01/2027"
+      // batia com "trocar...data" (comando de reagendar) e, sem alvo
+      // explícito, caía no único compromisso ativo do usuário — remarcando
+      // algo completamente sem relação. looksLikeModuleReference bloqueia
+      // esse ramo inteiro quando a frase é claramente sobre parcelamento/
+      // conta fixa: quem resolve isso é o bloco de parcelamentos, não a agenda.
+      else if (!handled && !looksLikeModuleReference && (cmd || (pending && pending.kind === "appointment_reschedule"))) {
         // Resolve o alvo pelo contexto: pending > último lembrete > único ativo.
         let target: any = null;
         if (pending && (pending.kind === "appointment_confirm" || pending.kind === "appointment_reschedule")) {
@@ -1574,12 +1599,8 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       // numérica à lista que acabou de ser mostrada ("2 vence dia 15",
       // "corrige o 1 pra R$900"). Nesses casos, quem decide é o bloco de
       // parcelamentos/contas mais abaixo — nunca "a última transação".
-      const looksLikeModuleReference =
-        /\b(parcela|parcelas|parcelamento|parcelamentos|parcelad[ao]s?|cons[óo]rcio|conta\s+fixa)\b/i.test(inputText) ||
-        (!!lastCtx?.installments_list?.length && (
-          /^\s*\d{1,2}\b/.test(normalized) ||
-          /\b(?:o|a|item|numero|n[úu]mero)\s+\d{1,2}\b/i.test(normalized)
-        ));
+      // (looksLikeModuleReference já foi calculado mais acima, antes até do
+      // fluxo de agenda — mesma trava vale pros dois.)
 
       // 0a) Edição do lançamento anterior por linguagem natural ("foi ontem",
       //     "muda a data", "isso foi dia 22", "coloca em mercado", "apaga isso").
