@@ -497,7 +497,8 @@ REGRA CRÍTICA DA DATA (occurred_at):
 REGRA CRÍTICA DO VALOR (amount):
 - Use SEMPRE o valor final da nota: "TOTAL", "VALOR TOTAL", "TOTAL A PAGAR", "VALOR PAGO", "TOTAL DA COMPRA".
 - NUNCA use subtotal (quando houver total final), valor unitário, valor de um único item, troco, desconto, ou números de QR Code/chave fiscal.
-- Uma nota fiscal gera UM único lançamento com o valor total (não um item por produto), a não ser que a imagem seja claramente uma lista de vários pagamentos distintos.
+- ⚠️ FORMA DE PAGAMENTO DIVIDIDA: quando a nota detalhar o pagamento em várias linhas por método (ex.: "Dinheiro: R$120,00" + "PIX: R$352,93", ou "Cartão de Crédito: R$100,00" + "Dinheiro: R$50,00"), CADA uma dessas linhas é só uma FATIA de como o cliente pagou — NUNCA é o valor total da compra sozinha. O total é o "VALOR TOTAL"/"TOTAL A PAGAR" impresso (que deve bater com a SOMA de todas as formas de pagamento). Bug real já ocorrido: uma nota com total R$472,93 (Dinheiro R$120 + PIX R$352,93) foi registrada errada como R$120 — nunca repita esse erro.
+- Uma nota fiscal gera UM único lançamento com o valor total (não um item por produto, nem um item por forma de pagamento), a não ser que a imagem seja claramente uma lista de vários pagamentos distintos.
 Extraia também, quando presentes: valor total, estabelecimento (use em description), categoria sugerida.
 
 OCR OBRIGATÓRIO: devolva em extracted_text TODO o texto legível da imagem (nomes, datas, horários, endereços, valores, itens), sem resumir e sem inventar. Isso vale mesmo quando a imagem não for financeira.
@@ -563,6 +564,7 @@ REGRAS:
 
 - A data DO DOCUMENTO tem prioridade MÁXIMA sobre a data de envio e sobre a legenda. Preserve o dia/mês/ano impressos exatamente como estão (não some nem subtraia dias).
 - NOTA FISCAL / CUPOM: use SEMPRE o VALOR TOTAL (ou "TOTAL A PAGAR" / "VALOR PAGO"). NUNCA use subtotal, troco, desconto, valor unitário, dinheiro recebido ou o valor de um item isolado.
+- ⚠️ FORMA DE PAGAMENTO DIVIDIDA: se o documento detalhar o pagamento em várias linhas por método ("Dinheiro: R$120,00" + "PIX: R$352,93"), cada linha é só uma FATIA — use o VALOR TOTAL impresso, nunca uma única linha de forma de pagamento como se fosse o total inteiro.
 - A legenda do usuário (ex.: "sorvete", "gasolina", "Uber", "almoço", "mensalidade academia") define a DESCRIÇÃO e ajuda a definir a CATEGORIA. Use-a sempre que existir.
 - Se o documento tiver VÁRIOS lançamentos (extrato/fatura), use kind = "bulk" com a lista de items.
 - Nunca invente valores. Se o valor não estiver legível, deixe amount vazio.

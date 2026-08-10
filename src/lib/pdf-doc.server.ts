@@ -285,30 +285,71 @@ function toNumberBR(raw: string): number | null {
 /** Rótulos que NUNCA representam o valor da transação. */
 const NON_TOTAL_LABEL = /(troco|sub\s*-?\s*total|subtotal|desconto|acr[eé]scimo|juros|multa|dinheiro\s+recebido|valor\s+recebido\s+em\s+dinheiro|saldo|limite|economia|frete\s+gr[aá]tis|unit[aá]rio|qtd)/i;
 
-/** Valor OFICIAL do comprovante/nota. Sempre o VALOR TOTAL — nunca subtotal/troco. */
+/** Rótulo INEQUÍVOCO de total da compra — nunca é uma forma de pagamento parcial. */
+const STRONG_TOTAL_LABEL = /(valor\s*total|total\s*a\s*pagar|total\s*geral|total\s*da\s*(nota|compra|venda)|vl\s*total)/i;
+
+/**
+ * Rótulo AMBÍGUO: "total"/"valor pago" bare também aparece em linhas de
+ * DETALHAMENTO de forma de pagamento ("Valor Pago em Dinheiro: R$120,00"),
+ * que não é o total da compra — é só uma fatia dele.
+ */
+const WEAK_TOTAL_LABEL = /(valor\s*pago|valor\s*do\s*pix|valor\s*da\s*transa[cç][aã]o|total)/i;
+
+/**
+ * Linha de detalhamento de FORMA DE PAGAMENTO (dinheiro/pix/cartão/cheque).
+ * Um valor nessa linha é uma PARTE do pagamento, nunca o total da compra.
+ * Bug real: nota com "VALOR TOTAL: R$472,93" seguida de um detalhamento
+ * "Dinheiro: R$120,00 / PIX: R$352,93" registrou R$120 — a linha de
+ * detalhamento batia num rótulo ambíguo de total e "última ocorrência
+ * vence" sobrescreveu o valor certo.
+ */
+const PAYMENT_METHOD_LABEL = /(forma\s+de\s+pagamento|em\s+dinheiro|em\s+esp[eé]cie|no\s+pix|via\s+pix|do\s+pix|no\s+cart[aã]o|cart[aã]o\s+de\s+(cr[eé]dito|d[eé]bito)|\bpix\s*:|\bdinheiro\s*:|\bcr[eé]dito\s*:|\bd[eé]bito\s*:|\bcheque\b)/i;
+
+/** Valor OFICIAL do comprovante/nota. Sempre o VALOR TOTAL — nunca subtotal/troco/forma de pagamento parcial. */
 export function extractReceiptAmount(text: string): number | null {
   if (!text) return null;
   const money = /R?\$?\s*([\d.]{1,12},\d{2})/;
-
-  // 1) Linhas com rótulo de total explícito (última ocorrência vence — notas
-  //    fiscais repetem "TOTAL" e o valor final aparece por último).
-  const totalLabel = /(valor\s*total|total\s*a\s*pagar|total\s*geral|total\s*da\s*(nota|compra|venda)|vl\s*total|valor\s*pago|valor\s*do\s*pix|valor\s*da\s*transa[cç][aã]o|total)/i;
   const lines = text.split(/\r?\n/);
-  let labeled: number | null = null;
+
+  // 1) Rótulo inequívoco de total (última ocorrência vence — notas fiscais
+  //    repetem "TOTAL" e o valor final impresso costuma ser o certo).
+  let strong: number | null = null;
   for (const line of lines) {
-    if (!totalLabel.test(line) || NON_TOTAL_LABEL.test(line)) continue;
+    if (!STRONG_TOTAL_LABEL.test(line) || NON_TOTAL_LABEL.test(line)) continue;
     const m = line.match(money);
     const n = m?.[1] ? toNumberBR(m[1]) : null;
-    if (n) labeled = n;
+    if (n) strong = n;
   }
-  if (labeled) return labeled;
+  if (strong) return strong;
 
-  // 2) Rótulo e valor em linhas diferentes (layout de comprovantes PIX).
+  // 2) Rótulo ambíguo ("total"/"valor pago" bare) — uma linha que também é
+  //    detalhamento de forma de pagamento (dinheiro/pix/cartão) NUNCA vira o
+  //    total; só é considerada como candidata a soma no passo 3.
+  let weak: number | null = null;
+  const paymentLines: number[] = [];
+  for (const line of lines) {
+    if (NON_TOTAL_LABEL.test(line) || !WEAK_TOTAL_LABEL.test(line)) continue;
+    const m = line.match(money);
+    const n = m?.[1] ? toNumberBR(m[1]) : null;
+    if (!n) continue;
+    if (PAYMENT_METHOD_LABEL.test(line)) paymentLines.push(n);
+    else weak = n;
+  }
+  if (weak) return weak;
+
+  // 3) Sem total explícito, mas com ≥2 linhas de forma de pagamento
+  //    (dinheiro + pix + cartão...): soma como validação/reconstrução do total.
+  if (paymentLines.length >= 2) {
+    const sum = Math.round(paymentLines.reduce((a, b) => a + b, 0) * 100) / 100;
+    if (sum > 0) return sum;
+  }
+
+  // 4) Rótulo e valor em linhas diferentes (layout de comprovantes PIX).
   const inline = text.match(/(?:valor\s*(?:total|pago)?|total)\s*[:\-]?\s*(?:R\$)?\s*([\d.]{1,12},\d{2})/i);
   const inlineN = inline?.[1] ? toNumberBR(inline[1]) : null;
   if (inlineN) return inlineN;
 
-  // 3) Sem rótulo: só aceita quando há um único valor monetário no documento.
+  // 5) Sem rótulo: só aceita quando há um único valor monetário no documento.
   const all = Array.from(text.matchAll(/R\$\s*([\d.]{1,12},\d{2})/g))
     .map((m) => toNumberBR(m[1]!))
     .filter((n): n is number => n !== null);
