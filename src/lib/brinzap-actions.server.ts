@@ -206,6 +206,28 @@ async function findRecentDuplicate(
   return exact ?? null;
 }
 
+/**
+ * Guarda de duplicata genérica por conteúdo, reaproveitável por qualquer
+ * tabela de criação — antes só expense/income tinham essa proteção
+ * (findRecentDuplicate, 60s) e installment tinha uma reimplementação
+ * própria (5min); recordBill/recordDebt/recordGoal não tinham NENHUMA.
+ */
+async function findRecentDuplicateRow(
+  table: string,
+  userId: string,
+  matchFields: Record<string, string | number>,
+  windowMs: number,
+): Promise<{ id: string } | null> {
+  let q = supabaseAdmin
+    .from(table)
+    .select("id")
+    .eq("user_id", userId)
+    .gte("created_at", new Date(Date.now() - windowMs).toISOString());
+  for (const [key, value] of Object.entries(matchFields)) q = q.eq(key, value);
+  const { data } = await q.order("created_at", { ascending: false }).limit(1);
+  return data && data.length > 0 ? { id: (data[0] as any).id } : null;
+}
+
 async function logDuplicate(opts: {
   userId: string;
   reason: string;
@@ -275,11 +297,6 @@ export async function recordExpense(
       await logDuplicate({ userId, reason: "duplicate_source_message", kind: "expense", amount: data.amount, description: data.description });
       return { ok: true, duplicate: true, replyText: "Esse lançamento já foi registrado." };
     }
-    if (typeof error.message === "string" && error.message.includes("ABIO_DUPLICATE_TX")) {
-      await logDuplicate({ userId, reason: "duplicate_trigger_60s", kind: "expense", amount: data.amount, description: data.description });
-      return { ok: true, duplicate: true, replyText: "Esse lançamento já foi registrado." };
-    }
-
     console.error("[actions] recordExpense", error);
     return { ok: false, replyText: "Ocorreu um erro interno e o gasto não foi confirmado. Tente novamente em instantes." };
   }
@@ -350,11 +367,6 @@ export async function recordIncome(
   } catch (error: any) {
     if (isUniqueSourceMessageViolation(error)) {
       await logDuplicate({ userId, reason: "duplicate_source_message", kind: "income", amount, description });
-      return { ok: true, duplicate: true, replyText: "Esse lançamento já foi registrado." };
-    }
-    if (typeof error.message === "string" && error.message.includes("ABIO_DUPLICATE_TX")) {
-      await logDuplicate({ userId, reason: "duplicate_trigger_60s", kind: "income", amount, description });
-
       return { ok: true, duplicate: true, replyText: "Esse lançamento já foi registrado." };
     }
     console.error("[actions] recordIncome", error);
@@ -1062,6 +1074,11 @@ Qual é o *dia do vencimento* dessa conta todos os meses? (Ex.: 05, 10, 15, 30)`
     ? input.due_day
     : Number(String(dueDate).slice(8, 10)) || null;
 
+  const dupBill = await findRecentDuplicateRow("recurring_bills", userId, { title, amount }, 60_000);
+  if (dupBill) {
+    return { ok: true, billId: dupBill.id, replyText: "Essa conta fixa já foi registrada." };
+  }
+
   const { data: created, error } = await supabaseAdmin.from("recurring_bills").insert({
     user_id: userId,
     title,
@@ -1590,6 +1607,10 @@ export async function recordDebt(
   if (!title || !(principal > 0)) {
     return { ok: false, replyText: "Não captei a dívida. Ex.: _empréstimo banco X — R$ 1500_" };
   }
+  const dupDebt = await findRecentDuplicateRow("debts", userId, { title, principal }, 60_000);
+  if (dupDebt) {
+    return { ok: true, replyText: "Essa dívida já foi registrada." };
+  }
   const { error } = await supabaseAdmin.from("debts").insert({
     user_id: userId,
     title,
@@ -1612,6 +1633,10 @@ export async function recordGoal(
   const target = Number(input.target_amount ?? input.amount);
   if (!title || !(target > 0)) {
     return { ok: false, replyText: "Não captei a meta. Ex.: _meta viagem R$ 5000_" };
+  }
+  const dupGoal = await findRecentDuplicateRow("financial_goals", userId, { title, target_amount: target }, 60_000);
+  if (dupGoal) {
+    return { ok: true, replyText: "Essa meta já foi registrada." };
   }
   const { error } = await supabaseAdmin.from("financial_goals").insert({
     user_id: userId,
