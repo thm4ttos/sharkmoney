@@ -314,7 +314,13 @@ function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; ask?: an
   const billsRe = /\b(contas?\s+fixas?|contas?\s+mensa(l|is)|contas?\s+recorrentes?|despesas?\s+recorrentes?|contas?\s+cadastradas?|conta\s+fixa|contas?(\s+do|\s+desse|\s+deste|\s+esse|\s+este)?\s+(mes|mês)|vencimento(s)?|fatura(s)?|boleto(s)?|compromissos?\s+financeiro|contas\s+a\s+pagar|conta[s]?)\b/i;
   const billsHintRe = /\b(aluguel|internet|luz|agua|água|energia|gas|gás|condomini|academia|netflix|spotify|streaming|mensalidade|celular|telefone|plano\s+de\s+saude|plano\s+de\s+saúde|mercado(?!\s+pago)|escola|faculdade)\b/i;
   const isFinancialAsk = /(gast|despes|said|sa(i|í)da|receit|ganh|entrad|entrou|recebi|resumo|fechament|balan(c|ç)o|movimenta|financeiramente|quanto\s+(gast|entrou|recebi|sobra))/i.test(t);
-  if ((billsRe.test(t) || (isQuery && billsHintRe.test(t))) && !isFinancialAsk) {
+  // Mesmo bug de "Parcelamentos" (ver acima), mas aqui um digito sozinho não
+  // basta pra distinguir criação de consulta — "quais contas vencem dia 5?"
+  // TEM dígito e é consulta legítima. O que separa uma criação real é um
+  // VALOR em dinheiro ("...de mil reais", "R$ 120"): pergunta sobre vencimento
+  // não afirma quanto custa, só pergunta a data.
+  const hasMoneyCue = /r\$|\breais?\b|\d{1,3}(?:\.\d{3})*,\d{2}/i.test(t);
+  if ((billsRe.test(t) || (isQuery && billsHintRe.test(t))) && !isFinancialAsk && !hasMoneyCue) {
     let filter: "all" | "upcoming" | "overdue" | "pending" = "all";
     if (/\batrasad|em\s+atraso|vencid/i.test(t)) filter = "overdue";
     else if (/\bpendent/i.test(t)) filter = "pending";
