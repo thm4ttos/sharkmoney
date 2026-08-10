@@ -3227,7 +3227,13 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
           // depende do canal (texto ou áudio transcrito): mesma checagem
           // para os dois, porque a ambiguidade nasce da mensagem, não da
           // origem.
-          const title = (intent.title ?? intent.description ?? "").trim();
+          // Nome do produto/serviço não é campo essencial — mesma regra já
+          // usada em despesa avulsa ("gastei 90" → description="Gasto
+          // avulso" sem perguntar): se a frase não disser o que foi
+          // comprado, cria com um título genérico em vez de travar a
+          // criação perguntando. Valor, quantidade e reconciliação SIM são
+          // essenciais (é neles que mora o risco de dado errado).
+          const title = (intent.title ?? intent.description ?? "").trim() || "Compra parcelada";
           const amount = typeof intent.amount === "number" && intent.amount > 0 ? intent.amount : undefined;
           const total = typeof intent.installments_total === "number" && intent.installments_total > 0 ? intent.installments_total : undefined;
           const totalAmount = typeof intent.total_amount === "number" && intent.total_amount > 0 ? intent.total_amount : undefined;
@@ -3238,11 +3244,10 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
             ? Math.abs(totalAmount - amount * total) <= Math.max(1, totalAmount * 0.02)
             : true;
 
-          const missing: "reconcile" | "amount" | "installments_total" | "title" | "confirm" | null =
+          const missing: "reconcile" | "amount" | "installments_total" | "confirm" | null =
             !reconciles ? "reconcile"
             : !amount ? "amount"
             : !total ? "installments_total"
-            : !title ? "title"
             : (gate === "ask" || gate === "menu") ? "confirm"
             : null;
 
@@ -3265,9 +3270,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
               ? `Não consegui confirmar com segurança o valor de cada parcela${title ? ` de *${title}*` : ""}. Qual é?`
               : missing === "installments_total"
               ? `Quantas parcelas são${title ? ` de *${title}*` : ""}?`
-              : missing === "title"
-              ? `Do que é essa compra parcelada (${total}x de ${formatMoneyBR(amount!)})? Me diz o nome do produto/serviço.`
-              : `Posso confirmar esse parcelamento?\n\n📝 ${title || "Parcelamento"}\n🔢 ${total} parcelas de ${formatMoneyBR(amount!)} (total ${formatMoneyBR(amount! * total!)})\n\nResponda *sim* pra salvar.`;
+              : `Posso confirmar esse parcelamento?\n\n📝 ${title}\n🔢 ${total} parcelas de ${formatMoneyBR(amount!)} (total ${formatMoneyBR(amount! * total!)})\n\nResponda *sim* pra salvar.`;
             break;
           }
 
