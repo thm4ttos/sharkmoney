@@ -1336,6 +1336,22 @@ export async function recordInstallment(
   if (!title || !(parcel > 0) || !(total > 0)) {
     return { ok: false, replyText: "Não captei o parcelamento. Ex.: _Fórum (9ª de 10) — R$ 70_" };
   }
+  // Segunda linha de defesa contra duplicata: se uma mensagem seguinte (ex.:
+  // uma correção que o followup não soube tratar) acabar caindo de volta na
+  // criação, um parcelamento idêntico criado há pouco é quase certamente o
+  // mesmo, não um novo. Mesma janela/lógica já usada em despesa e receita.
+  const recentSinceISO = new Date(Date.now() - 5 * 60_000).toISOString();
+  const { data: recentDup } = await supabaseAdmin
+    .from("installment_purchases").select("id, title, installments_total, total_amount")
+    .eq("user_id", userId).gte("created_at", recentSinceISO)
+    .order("created_at", { ascending: false }).limit(10);
+  const dupMatch = (recentDup ?? []).find((r: any) =>
+    Number(r.installments_total) === total &&
+    Math.abs(Number(r.total_amount) - parcel * total) < 1,
+  );
+  if (dupMatch) {
+    return { ok: true, row: { id: dupMatch.id }, replyText: "Esse parcelamento já foi registrado." };
+  }
   // O total é sempre DERIVADO de parcela × quantidade — os dois fatos que o
   // usuário realmente enunciou ("10 parcelas de mil reais"). Um total_amount
   // vindo de fora (ex.: OCR de um contrato) só é aceito quando CONCORDA com
@@ -1440,6 +1456,9 @@ export async function applyInstallmentFollowUp(
   }
   if (typeof patch.paid_installments === "number") {
     update.paid_installments = Math.min(newTotal, patch.paid_installments);
+  }
+  if (patch.payment_day && patch.payment_day >= 1 && patch.payment_day <= 31) {
+    update.first_due_at = nextDueFromDaySP(patch.payment_day);
   }
   if (Object.keys(update).length === 0) return { ok: false, replyText: "" };
   update.updated_at = new Date().toISOString();
