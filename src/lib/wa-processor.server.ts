@@ -892,7 +892,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     // Pendência + memória de última consulta (precisa vir antes do onboarding:
     // confirmações como "Sim" devem executar a ação pendente, não reiniciar fluxo).
     let pending: any = null;
-    let lastCtx: { period?: any; ask?: any; at?: string } | null = null;
+    let lastCtx: { period?: any; ask?: any; at?: string; installments_list?: any[] } | null = null;
     {
       const { data: contact } = await supabaseAdmin
         .from("wa_contacts").select("id, pending_action, last_query_context").eq("phone", phone).maybeSingle();
@@ -911,7 +911,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         pending = rawPending;
       }
       const rawCtx = (contact as any)?.last_query_context ?? null;
-      if (rawCtx?.period) lastCtx = rawCtx;
+      if (rawCtx?.period || rawCtx?.installments_list) lastCtx = rawCtx;
     }
 
     const normalized = (inputText || "").trim().toLowerCase().replace(/[!.,?¿¡;:]+$/g, "");
@@ -1836,6 +1836,43 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           content: preview.replyText, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
         });
         return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "delete_request" };
+      }
+    }
+
+    // ===== REFERÊNCIA NUMÉRICA A "Seus parcelamentos" =====
+    // Depois de "quero ver meus parcelamentos" (lista numerada 1, 2, 3...),
+    // "2 vence dia 15" ou "corrige o 1 pra 900" tem que resolver sozinho pro
+    // item certo — sem o usuário repetir o nome. Vale por texto ou áudio
+    // (chega aqui como texto normal, já transcrito) e não expira por
+    // pending_action (é memória leve, não trava nenhum outro fluxo).
+    if (!imageUrl && inputText && inputText.trim() && lastCtx?.installments_list?.length) {
+      const listAgeMin = lastCtx.at ? (Date.now() - new Date(lastCtx.at).getTime()) / 60000 : Infinity;
+      if (listAgeMin <= 30) {
+        const leadingMatch = normalized.match(/^(\d{1,2})\b/);
+        const connectorMatch = normalized.match(/\b(?:o|a|item|numero|número|parcelamento)\s+(\d{1,2})\b/);
+        const refMatch = leadingMatch ?? connectorMatch;
+        const n = refMatch ? parseInt(refMatch[1], 10) : NaN;
+        const target = lastCtx.installments_list.find((it: any) => it.n === n);
+        if (target) {
+          const { parseBillFollowUp } = await import("@/lib/bill-installments");
+          const patch = parseBillFollowUp(inputText);
+          if (patch) {
+            const res = target.kind === "installment"
+              ? await actions.applyInstallmentFollowUp(profile.id, target.id, patch)
+              : await actions.applyBillInstallmentFollowUp(profile.id, target.id, patch);
+            if (res.ok) {
+              const sendResult = await sendWhatsAppText(replyPhone, res.replyText);
+              await supabaseAdmin.from("whatsapp_messages").update({
+                ai_intent: "installment_list_ref", status: sendResult.ok ? "processed" : "send_error",
+              }).eq("id", row.id);
+              await supabaseAdmin.from("whatsapp_messages").insert({
+                user_id: profile.id, phone: replyPhone, direction: "out", media_type: "text",
+                content: res.replyText, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
+              });
+              return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "installment_list_ref" };
+            }
+          }
+        }
       }
     }
 
@@ -3088,7 +3125,20 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
 
         case "query_appointments": replyText = (await actions.queryAppointments(profile.id)).replyText; break;
         case "query_bills": replyText = (await actions.queryBills(profile.id, { filter: intent.filter, hint: intent.hint, dueDay: intent.dueDay })).replyText; break;
-        case "query_installments": replyText = (await actions.queryInstallments(profile.id)).replyText; break;
+        case "query_installments": {
+          const listRes = await actions.queryInstallments(profile.id);
+          replyText = listRes.replyText;
+          // Memoriza a lista numerada pra "2 vence dia 15" resolver sozinho.
+          if (listRes.items.length > 0) {
+            try {
+              await supabaseAdmin.from("wa_contacts").upsert(
+                { phone, name: profile.name ?? null, last_query_context: { installments_list: listRes.items, at: new Date().toISOString() } },
+                { onConflict: "phone" },
+              );
+            } catch {}
+          }
+          break;
+        }
         case "query_debts": replyText = (await actions.queryDebts(profile.id)).replyText; break;
         case "query_goals": replyText = (await actions.queryGoals(profile.id)).replyText; break;
         case "query_habits": replyText = (await actions.queryHabits(profile.id)).replyText; break;

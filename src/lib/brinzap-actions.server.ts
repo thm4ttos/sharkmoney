@@ -2592,11 +2592,19 @@ export async function queryBills(
 
 
 /** Consulta parcelamentos ativos (installment_purchases). */
-export async function queryInstallments(userId: string): Promise<{ replyText: string }> {
+export type InstallmentListItem = { n: number; kind: "installment" | "bill"; id: string; title: string };
+
+/**
+ * Numera cada parcelamento/conta-com-prazo (1, 2, 3...) e devolve a lista
+ * junto com o texto — quem chama guarda essa lista em last_query_context
+ * pra que "muda o vencimento do 2 pra dia 15" resolva o alvo certo sem o
+ * usuário precisar repetir o nome.
+ */
+export async function queryInstallments(userId: string): Promise<{ replyText: string; items: InstallmentListItem[] }> {
   const [{ data, error }, { data: bills }] = await Promise.all([
     supabaseAdmin
       .from("installment_purchases")
-      .select("title, total_amount, installments_total, installments_paid, first_due_at")
+      .select("id, title, total_amount, installments_total, installments_paid, first_due_at")
       .eq("user_id", userId)
       .eq("active", true)
       .order("created_at", { ascending: false }),
@@ -2607,31 +2615,33 @@ export async function queryInstallments(userId: string): Promise<{ replyText: st
       .not("total_installments", "is", null)
       .order("created_at", { ascending: false }),
   ]);
-  if (error) return { replyText: "Não consegui buscar seus parcelamentos 🙏." };
+  if (error) return { replyText: "Não consegui buscar seus parcelamentos 🙏.", items: [] };
   const list = (data ?? []) as any[];
   const billList = (bills ?? []) as any[];
   if (list.length === 0 && billList.length === 0) {
-    return { replyText: "📭 Você não possui parcelamentos cadastrados.\n\n➕ Ex.: _Notebook 12x de R$ 250_" };
+    return { replyText: "📭 Você não possui parcelamentos cadastrados.\n\n➕ Ex.: _Notebook 12x de R$ 250_", items: [] };
   }
-  let remaining = 0;
-  const lines = list.slice(0, 15).map((i) => {
+  const items: InstallmentListItem[] = [];
+  const lines: string[] = [];
+  let n = 0;
+  for (const i of list.slice(0, 15)) {
+    n++;
+    items.push({ n, kind: "installment", id: i.id, title: i.title });
     const total = Number(i.installments_total || 0);
     const paid = Number(i.installments_paid || 0);
     const per = total > 0 ? Number(i.total_amount || 0) / total : 0;
     const rem = Math.max(0, total - paid) * per;
-    remaining += rem;
-    return `💳 *${i.title}* — ${paid}/${total} pagas\n${BRL(per)}/parcela · restante ${BRL(rem)}`;
-  });
+    lines.push(`${n} - *${i.title}* — ${paid}/${total} pagas\n${BRL(per)}/parcela · restante ${BRL(rem)} · próx. ${formatYMDBr(String(i.first_due_at ?? "").slice(0, 10))}`);
+  }
   // Contas fixas com prazo determinado (consórcio, financiamento) também são parcelamentos.
   for (const b of billList.slice(0, 15)) {
+    n++;
+    items.push({ n, kind: "bill", id: b.id, title: b.title });
     const info = billInstallmentInfo(b);
     const per = Number(b.amount || 0);
-    remaining += info.remaining * per;
-    lines.push(
-      `📌 *${b.title}* — ${info.paid}/${info.total} pagas\n${BRL(per)}/parcela · restam ${info.remaining} · próx. ${formatYMDBr(b.next_due_at)}`,
-    );
+    lines.push(`${n} - *${b.title}* — ${info.paid}/${info.total} pagas\n${BRL(per)}/parcela · restam ${info.remaining} · próx. ${formatYMDBr(b.next_due_at)}`);
   }
-  return { replyText: `💳 *Seus parcelamentos*\n\n${lines.join("\n\n")}\n\n💰 *Saldo devedor total:* ${BRL(remaining)}` };
+  return { replyText: `💳 *Seus parcelamentos*\n\n${lines.join("\n\n")}\n\nPra corrigir algum, é só dizer o número (ex.: _"2 vence dia 15"_ ou _"corrige o 1 pra R$900"_).`, items };
 }
 
 
