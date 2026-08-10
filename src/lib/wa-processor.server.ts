@@ -158,7 +158,7 @@ function nowLocalSP(): Date {
 }
 
 /** Espelho de detectPeriodFromText — texto já normalizado (NFD, sem acentos). */
-function detectPeriodFromTextLocal(t: string): any | null {
+export function detectPeriodFromTextLocal(t: string): any | null {
   if (!t) return null;
   const now = nowLocalSP();
   if (/\bhoje\b/.test(t)) return { range: "today" };
@@ -263,7 +263,7 @@ const FOLLOW_UP_DETAIL_RE = /\b(especific(a|ar|ou)|detalh(a|e|ar|ou)|discrimin(a
  */
 const EXPLICIT_PERIOD_OVERRIDE_RE = /\b(agora|em\s+vez\s+disso|no\s+lugar)\b/;
 
-function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; ask?: any } | null): any | null {
+export function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; ask?: any } | null): any | null {
   const t = (raw || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   if (!t || t.length < 3) return null;
 
