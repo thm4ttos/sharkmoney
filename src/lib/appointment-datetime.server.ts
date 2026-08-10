@@ -4,16 +4,10 @@
 // a lançamentos financeiros já ocorridos), aqui a referência sempre aponta para
 // o próximo acontecimento: "sexta" = a próxima sexta, "dia 15" = o próximo 15.
 
+import { MONTHS_PT as MONTHS, WEEKDAYS_PT as WEEKDAYS, WEEKDAY_NAME_PATTERN, MONTH_NAME_PATTERN, normalizeWeekdayKey } from "@/lib/temporal-vocab";
+
 const SP_TZ = "America/Sao_Paulo";
 
-const WEEKDAYS: Record<string, number> = {
-  domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
-};
-const MONTHS: Record<string, number> = {
-  janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7,
-  agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
-  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
-};
 const HOUR_WORDS: Record<string, number> = {
   uma: 1, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6,
   sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12,
@@ -88,7 +82,7 @@ export function parseFutureDateTimeSP(text: string, base = new Date()): FutureDa
 
   // --- "15 de julho" ---
   if (!hasDate) {
-    const dmes = norm.match(/\b(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b(?:\s+de\s+(\d{2,4}))?/);
+    const dmes = norm.match(new RegExp(String.raw`\b(\d{1,2})\s+(?:de\s+)?(${MONTH_NAME_PATTERN})\b(?:\s+de\s+(\d{2,4}))?`));
     if (dmes) {
       const d = +dmes[1], m = MONTHS[dmes[2]];
       let y = dmes[3] ? +dmes[3] : today.y;
@@ -106,9 +100,9 @@ export function parseFutureDateTimeSP(text: string, base = new Date()): FutureDa
   // mesmo; se já passou, aí sim vai pra próxima ocorrência (+7).
   let weekdayIsToday = false;
   if (!hasDate) {
-    const wd = norm.match(/\b(?:na\s+|no\s+|essa\s+|esta\s+|proxima\s+|proximo\s+)?(domingo|segunda(?:-feira)?|terca(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|sabado)\b/);
+    const wd = norm.match(new RegExp(String.raw`\b(?:na\s+|no\s+|essa\s+|esta\s+|proxima\s+|proximo\s+)?(${WEEKDAY_NAME_PATTERN})\b`));
     if (wd) {
-      const target = WEEKDAYS[wd[1].replace("-feira", "")];
+      const target = WEEKDAYS[normalizeWeekdayKey(wd[1])];
       let diff = target - todayWd;
       if (diff < 0) diff += 7;
       if (diff === 0) weekdayIsToday = true;

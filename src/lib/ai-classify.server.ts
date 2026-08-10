@@ -40,6 +40,8 @@ export type IntentKind =
   | "reset_data"
   | "confirm_yes"
   | "confirm_no"
+  | "clarify"
+  | "image_unreadable"
   | "unknown";
 
 export type ClassifyItem = {
@@ -81,8 +83,12 @@ export type ClassifyResult = ClassifyItem & {
   range_label?: string;
   items?: ClassifyItem[];
   /**
-   * Confiança da classificação entre 0 e 1. Usado pelo gate de blindagem:
-   * >=0.95 executa direto, 0.80-0.95 executa + aprende, <0.80 pede confirmação.
+   * Confiança da classificação entre 0 e 1. Escala usada pelo gate real
+   * (gateConfidence em ai-confidence.server.ts) e é a MESMA escala pedida
+   * ao modelo no prompt — as duas precisam ficar sincronizadas ou o gate
+   * decide "executar" para casos que o prompt descreveria como ambíguos:
+   * >=0.70 executa direto, 0.50-0.69 executa + aprende, 0.35-0.49 pede
+   * confirmação (sim/não), <0.35 nunca executa (oferece menu de opções).
    * Overrides determinísticos (parser, spontHit, bulk) chegam sem esse campo
    * e são tratados como 1 (executa silencioso).
    */
@@ -240,7 +246,7 @@ const TOOL = {
         match_hint: { type: "string", description: "Pista para localizar o lançamento sendo corrigido (categoria, descrição, valor antigo)." },
         profile_field: { type: "string", enum: ["income", "payday", "profession", "goal"], description: "Qual dado de PERFIL (cadastrado no onboarding) a pergunta/atualização se refere: income=renda mensal, payday=dia/frequência que recebe, profession=profissão, goal=objetivo financeiro." },
         profile_value: { type: "string", description: "Quando kind=update_profile: o novo valor em texto. Para profile_field=income, um número em reais (ex.: '20000'); a normalização de 'mil'/'k' já foi feita antes de chegar aqui." },
-        confidence: { type: "number", description: "Confiança da classificação entre 0 e 1. Use 0.95+ apenas quando a intenção, o valor e a categoria estiverem inequívocos. Use 0.80-0.94 quando houver ambiguidade leve (categoria dúbia, valor implícito, descrição vaga). Use <0.80 quando faltar informação crítica (sem valor claro, verbo ambíguo, mensagem incompleta). Consultas e respostas de confirmação (sim/não) sempre 1." },
+        confidence: { type: "number", description: "Confiança da classificação entre 0 e 1 — esta é a escala REAL usada pelo sistema pra decidir executar ou perguntar, não é apenas informativa. Use 0.70+ apenas quando a intenção, o valor e a categoria estiverem inequívocos (executa direto). Use 0.50-0.69 quando houver ambiguidade leve (categoria dúbia, valor implícito, descrição vaga — executa mas fica marcado pra revisão). Use 0.35-0.49 quando faltar informação relevante mas ainda dá pra arriscar um palpite (o sistema pede confirmação simples, sim/não, antes de gravar). Use <0.35 quando faltar informação crítica (sem valor claro, verbo ambíguo, mensagem incompleta demais pra arriscar) — o sistema NUNCA executa sozinho nesse caso, só oferece opções. Consultas e respostas de confirmação (sim/não) sempre 1." },
         items: {
           type: "array",
           description: "Quando kind=bulk, lista de itens individuais detectados na mensagem.",
@@ -279,7 +285,7 @@ Em frases como "Pago consórcio 220 parcelas já paguei 1, pago até o dia 15, 3
 Regra de identificação: o valor monetário (amount) é o número que tem centavos (vírgula/ponto + 2 dígitos) ou vem com "R$"; a quantidade de parcelas é um número inteiro solto antes/depois da palavra "parcela(s)". NUNCA copie o número de parcelas para "amount" nem o valor em reais para "installments_total".
 Preencha "total_amount" SOMENTE quando o usuário disser o total explicitamente (ex.: "total de 10 mil", um documento mostrando "VALOR TOTAL"). Nunca calcule/estime um total sozinho — o sistema já deriva total_amount = amount × installments_total quando você não tiver certeza; um total inventado que não bate com esse cálculo é pior que deixar o campo vazio. "10 parcelas de mil reais" tem UM valor e UMA contagem — nunca vire "220 parcelas" nem qualquer outro número que não esteja na frase.
 Isso vale IGUAL para texto e para áudio transcrito: uma fala como "dez parcelas de mil reais a partir de dezembro, vencimento máximo dia 10" tem exatamente os mesmos três dados (quantidade, valor, dia) que a versão digitada — extraia com o mesmo rigor, não invente nem arredonde só porque veio de transcrição.
-Se, mesmo assim, sobrar ambiguidade real sobre valor, quantidade de parcelas, vencimento ou qual conta/parcelamento está sendo alterado, use confidence BAIXO (<0.80) em vez de forçar um número — o sistema pergunta ao usuário exatamente o campo em dúvida e preserva os demais; não é necessário (nem desejável) você mesmo formular a pergunta de clarificação para isso.
+Se, mesmo assim, sobrar ambiguidade real sobre valor, quantidade de parcelas, vencimento ou qual conta/parcelamento está sendo alterado, use confidence BAIXO (<0.50) em vez de forçar um número — o sistema pergunta ao usuário exatamente o campo em dúvida e preserva os demais; não é necessário (nem desejável) você mesmo formular a pergunta de clarificação para isso.
 - debt: DÍVIDA (empréstimo, valor devido a alguém). Use title, principal via amount, creditor opcional.
 - goal: META financeira (formatura, viagem, reserva). Use title, target_amount, target_date opcional.
 
@@ -302,7 +308,7 @@ Consultas/comandos:
 - query_transactions: histórico de lançamentos, receitas ou despesas específicas ("minhas receitas", "minhas despesas", "últimos gastos", "histórico").
 - query_profile: pergunta sobre um DADO DE PERFIL que o próprio Abio coletou no onboarding (renda mensal, dia que recebe, profissão, objetivo financeiro) — NUNCA sobre movimentações. "Qual minha renda mensal?", "quanto eu disse que ganho?", "que dia eu recebo?", "qual meu objetivo?", "qual profissão eu cadastrei?" → kind="query_profile" + profile_field. ⚠️ Isso é diferente de "quanto recebi esse mês?" (query_transactions/query_summary — pergunta sobre dinheiro que ENTROU de verdade).
 - update_profile: o usuário está CORRIGINDO ou ATUALIZANDO um dado de perfil (não relatando uma movimentação). Sinais: "minha renda é/está X", "corrige minha renda para X", "na verdade eu ganho X", "atualiza meu salário para X", "não ganho X, ganho Y", "meu objetivo agora é X", "agora recebo todo dia X", "não sou mais [profissão], agora sou [profissão]" → kind="update_profile" + profile_field + profile_value. ⚠️ NUNCA confundir com kind="income": "recebi X hoje/ontem/agora" ou "caiu X na conta" = dinheiro que efetivamente entrou (kind="income", cria receita real). "Minha renda é X" ou "ganho X por mês" (sem verbo de recebimento pontual) = dado de planejamento (kind="update_profile"), NUNCA cria receita nem mexe no saldo.
-- create_credit_card: usuário quer CADASTRAR um cartão de crédito (não uma despesa nele). Sinais: "cadastra meu cartão X", "adiciona o cartão X", "tenho um cartão X que fecha dia Y e vence dia Z". Precisa de nome (title), dia de fechamento (closing_day) e dia de vencimento (due_day). Se faltar qualquer um dos três, use confidence baixo (<0.80) em vez de inventar — o sistema pergunta só o que falta.
+- create_credit_card: usuário quer CADASTRAR um cartão de crédito (não uma despesa nele). Sinais: "cadastra meu cartão X", "adiciona o cartão X", "tenho um cartão X que fecha dia Y e vence dia Z". Precisa de nome (title), dia de fechamento (closing_day) e dia de vencimento (due_day). Se faltar qualquer um dos três, use confidence baixo (<0.50) em vez de inventar — o sistema pergunta só o que falta.
 - query_credit_card: usuário quer saber o valor/vencimento da FATURA (não quer registrar nada). "Qual minha fatura?", "quanto tá o Nubank?", "quanto fechou o cartão?", "quando vence minha fatura?", "fatura do Inter" → kind="query_credit_card" + credit_card_hint (nome do cartão, se citado).
 ⚠️ Despesa NO CARTÃO: "gastei 300 no cartão Nubank", "passei 120 no Inter", "comprei 500 no crédito" → continua kind="expense" normalmente (ou item de bulk), só ACRESCENTE credit_card_hint com o nome citado ("Nubank"/"Inter") ou deixe vazio se só disse "no cartão"/"no crédito" sem nome — NUNCA vire create_credit_card nem query_credit_card por causa disso.
 - query_help

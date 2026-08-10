@@ -14,6 +14,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { normalizePhone, phoneLookupVariants } from "@/lib/phone";
 import { extractWhatsappMedia } from "@/lib/wa-media";
 import { parseMoneyAmount } from "@/lib/money-speech";
+import { MONTHS_PT } from "@/lib/temporal-vocab";
 
 /** Formata data/hora de compromisso em pt-BR (fuso de São Paulo). */
 function prettyApptDate(iso: string): string {
@@ -138,10 +139,13 @@ function fmtDateLocal(d: Date): string {
 }
 function addDaysLocal(d: Date, n: number) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 
-const MONTHS_LOCAL: Record<string, number> = {
-  janeiro: 0, fevereiro: 1, marco: 2, abril: 3, maio: 4, junho: 5,
-  julho: 6, agosto: 7, setembro: 8, outubro: 9, novembro: 10, dezembro: 11,
-};
+// Deriva do vocabulário compartilhado (1-indexed) para o formato 0-indexed
+// que este arquivo já usava (getMonth()) — evita mais uma cópia divergente
+// do mapa de meses, e ganha reconhecimento de abreviações ("jan", "fev"...)
+// que a versão anterior não tinha.
+const MONTHS_LOCAL: Record<string, number> = Object.fromEntries(
+  Object.entries(MONTHS_PT).map(([name, oneIndexed]) => [name, oneIndexed - 1]),
+);
 
 function nowLocalSP(): Date {
   const s = new Intl.DateTimeFormat("en-CA", {
@@ -2974,6 +2978,66 @@ Está correto? Responda *sim* ou *não*.`;
           });
         }
         // segue para o switch abaixo com o intent inalterado
+      }
+    } else if (
+      !pending && !imageUrl && intent && intent.kind === "income"
+      && typeof intent.amount === "number" && intent.amount > 0
+    ) {
+      // Mesmo gate de confiança do expense (sem checagem de anomalia — não
+      // há linha de base por categoria pra receita). Antes, receita era a
+      // única entre as movimentações reais que nunca olhava pra confidence.
+      const { gateConfidence, logMediumConfidence } = await import("./ai-confidence.server");
+      const conf = typeof intent.confidence === "number" ? intent.confidence : undefined;
+      const gate = gateConfidence(conf);
+      if (gate === "ask" || gate === "menu") {
+        await supabaseAdmin.from("wa_contacts").upsert(
+          {
+            phone,
+            name: profile.name ?? null,
+            pending_action: {
+              kind: "income",
+              amount: intent.amount,
+              description: intent.description ?? inputText,
+              occurred_at: intent.occurred_at,
+              expires_at: expiresIn5min(),
+            },
+          },
+          { onConflict: "phone" },
+        );
+        const valor = intent.amount.toFixed(2).replace(".", ",");
+        replyText =
+`🤔 Quero confirmar antes de registrar.
+
+💰 Valor: *R$ ${valor}*${intent.description ? `\n📝 ${intent.description}` : ""}
+
+Está correto? Responda *sim* ou *não*.`;
+        intent = { kind: "_awaiting_confirmation" };
+      } else if (gate === "execute_and_learn") {
+        void logMediumConfidence({
+          userId: profile.id,
+          originalText: inputText || "",
+          intent: { kind: intent.kind, confidence: conf, amount: intent.amount },
+        });
+      }
+    } else if (
+      !pending && !imageUrl && intent &&
+      (intent.kind === "bill" || intent.kind === "debt" || intent.kind === "goal" || intent.kind === "create_credit_card")
+    ) {
+      // Piso de segurança: confiança abaixo do floor nunca deve criar dado
+      // financeiro sozinha — antes, essas 4 intents ignoravam `confidence`
+      // por completo e sempre executavam. Não monta um pending_action (não
+      // há fluxo de confirmação dedicado pra essas 4 entidades ainda) — só
+      // pergunta, sem tocar em nada, e a próxima mensagem do usuário passa
+      // pela classificação de novo.
+      const { gateConfidence } = await import("./ai-confidence.server");
+      const conf = typeof intent.confidence === "number" ? intent.confidence : undefined;
+      if (gateConfidence(conf) === "menu") {
+        const label = intent.kind === "bill" ? "essa conta fixa"
+          : intent.kind === "debt" ? "essa dívida"
+          : intent.kind === "goal" ? "essa meta"
+          : "esse cartão";
+        replyText = `🤔 Não captei os detalhes de ${label} com certeza suficiente pra registrar sozinho. Pode mandar de novo com mais detalhes (nome, valor, vencimento)?`;
+        intent = { kind: "_awaiting_confirmation" };
       }
     }
     if (intent && intent.kind !== "_awaiting_confirmation" && !(pending && (intent.kind === "confirm_yes" || intent.kind === "confirm_no"))) {

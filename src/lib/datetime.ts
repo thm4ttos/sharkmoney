@@ -2,6 +2,8 @@
 // Todo o sistema trabalha internamente em UTC (ISO), mas exibe e interpreta
 // as datas no fuso America/Sao_Paulo.
 
+import { MONTHS_PT, WEEKDAYS_PT, WEEKDAY_NAME_PATTERN, MONTH_NAME_PATTERN, normalizeWeekdayKey } from "@/lib/temporal-vocab";
+
 export const SP_TZ = "America/Sao_Paulo";
 
 /** ISO do instante atual (mesmo valor em qualquer TZ; é um ponto no tempo). */
@@ -121,31 +123,6 @@ export function isoNoonSPFromPrintedDate(raw?: string | null): string | null {
 // deve virar compromisso).
 // ---------------------------------------------------------------
 
-const MONTHS_PT: Record<string, number> = {
-  janeiro: 1, jan: 1,
-  fevereiro: 2, fev: 2,
-  marco: 3, mar: 3, "março": 3,
-  abril: 4, abr: 4,
-  maio: 5, mai: 5,
-  junho: 6, jun: 6,
-  julho: 7, jul: 7,
-  agosto: 8, ago: 8,
-  setembro: 9, set: 9,
-  outubro: 10, out: 10,
-  novembro: 11, nov: 11,
-  dezembro: 12, dez: 12,
-};
-
-const WEEKDAYS_PT: Record<string, number> = {
-  domingo: 0,
-  segunda: 1, "segunda-feira": 1, seg: 1,
-  terca: 2, "terca-feira": 2, ter: 2,
-  quarta: 3, "quarta-feira": 3, qua: 3,
-  quinta: 4, "quinta-feira": 4, qui: 4,
-  sexta: 5, "sexta-feira": 5, sex: 5,
-  sabado: 6, "sabado-feira": 6, sab: 6,
-};
-
 function stripAccents(s: string): string {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -237,7 +214,7 @@ export function extractDateHintSP(text: string): DateHint | null {
   }
 
   // ---- "15 de julho", "15 julho" ----
-  const dmes = norm.match(/\b(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b(?:\s+de\s+(\d{2,4}))?/);
+  const dmes = norm.match(new RegExp(String.raw`\b(\d{1,2})\s+(?:de\s+)?(${MONTH_NAME_PATTERN})\b(?:\s+de\s+(\d{2,4}))?`));
   if (dmes) {
     const d = parseInt(dmes[1], 10);
     const m = MONTHS_PT[dmes[2]];
@@ -254,7 +231,7 @@ export function extractDateHintSP(text: string): DateHint | null {
   }
 
   // ---- "em janeiro" / "no mês de janeiro" (sem dia) → dia 15 do mês ----
-  const monthOnly = norm.match(/\b(?:em|no\s+mes\s+de)\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/);
+  const monthOnly = norm.match(new RegExp(String.raw`\b(?:em|no\s+mes\s+de)\s+(${MONTH_NAME_PATTERN})\b`));
   if (monthOnly) {
     const m = MONTHS_PT[monthOnly[1]];
     let y = today.y;
@@ -267,17 +244,17 @@ export function extractDateHintSP(text: string): DateHint | null {
   // ---- Dia da semana ----
   //   "última sexta" / "ultima sexta" → semana anterior (>=7 dias)
   //   "na sexta" / "sexta" isolado → ocorrência mais recente no passado (1..7)
-  const lastWd = norm.match(/\b(?:na\s+)?ultima\s+(domingo|segunda(?:-feira)?|terca(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|sabado)\b/);
+  const lastWd = norm.match(new RegExp(String.raw`\b(?:na\s+)?ultima\s+(${WEEKDAY_NAME_PATTERN})\b`));
   if (lastWd) {
-    const target = WEEKDAYS_PT[lastWd[1]];
+    const target = WEEKDAYS_PT[normalizeWeekdayKey(lastWd[1])];
     let diff = todayWd - target;
     if (diff <= 0) diff += 7;
     diff += 7; // semana ANTERIOR
     return build(-diff, lastWd[0]);
   }
-  const wd = norm.match(/\b(?:na\s+|no\s+)?(domingo|segunda(?:-feira)?|terca(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|sabado)\b/);
+  const wd = norm.match(new RegExp(String.raw`\b(?:na\s+|no\s+)?(${WEEKDAY_NAME_PATTERN})\b`));
   if (wd) {
-    const target = WEEKDAYS_PT[wd[1]];
+    const target = WEEKDAYS_PT[normalizeWeekdayKey(wd[1])];
     let diff = todayWd - target;
     if (diff <= 0) diff += 7; // sempre ocorrência PASSADA (regra do usuário)
     return build(-diff, wd[0]);
