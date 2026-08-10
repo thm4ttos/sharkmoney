@@ -277,23 +277,36 @@ function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; ask?: an
     return { kind: "query_appointments" };
   }
 
+  // Estes quatro módulos (hábitos, metas, dívidas, parcelamentos) tinham só a
+  // palavra-chave como gatilho, sem checar se era pergunta ou criação — ao
+  // contrário do bloco de Agenda acima, que já testa isQuery + ausência de
+  // pistas de criação. Resultado: "Compra parcelada, 10 parcelas de 1000
+  // reais..." (uma CRIAÇÃO) caía direto em query_installments, sem nunca
+  // chegar na IA (daí "ms":0 no log — nem chamava o classificador).
+  // Criação de parcelamento/dívida/meta SEMPRE tem um valor numérico
+  // ("10 parcelas de 1000", "empréstimo de 5000", "meta de 5000"); consulta
+  // pura em geral não ("quantas parcelas faltam?", "minhas dívidas").
+  // Mesma disciplina do bloco de Agenda: só roteia pra consulta quando for
+  // claramente uma pergunta (isQuery) E não houver número na frase.
+  const hasDigitCue = /\d/.test(t);
+
   // ----- Hábitos / Rotina -----
-  if (/\b(habit(o|os)|rotina|habitos)\b/i.test(t)) {
+  if (isQuery && !hasDigitCue && /\b(habit(o|os)|rotina|habitos)\b/i.test(t)) {
     return { kind: "query_habits" };
   }
 
   // ----- Metas -----
-  if (/\b(meta|metas|objetivo(s)?\sfinanceir)/i.test(t)) {
+  if (isQuery && !hasDigitCue && /\b(meta|metas|objetivo(s)?\sfinanceir)/i.test(t)) {
     return { kind: "query_goals" };
   }
 
   // ----- Dívidas -----
-  if (/\b(divida|dividas|devendo|devo|emprestimo|empréstimo)\b/i.test(t)) {
+  if (isQuery && !hasDigitCue && /\b(divida|dividas|devendo|devo|emprestimo|empréstimo)\b/i.test(t)) {
     return { kind: "query_debts" };
   }
 
   // ----- Parcelamentos -----
-  if (/\b(parcela|parcelas|parcelamento|parcelamentos|parcelad[ao]s?)\b/i.test(t)) {
+  if (isQuery && !hasDigitCue && /\b(parcela|parcelas|parcelamento|parcelamentos|parcelad[ao]s?)\b/i.test(t)) {
     return { kind: "query_installments" };
   }
 
