@@ -244,7 +244,7 @@ async function recordFreeformFinancialItems(
 }
 
 type GateAnswer =
-  | { type: "yes"; items: any[] }
+  | { type: "yes"; items: any[]; matchesGate: boolean }
   | { type: "no" }
   | { type: "query"; reply: string }
   | { type: "unclear" };
@@ -253,14 +253,24 @@ type GateAnswer =
  * Interpreta a resposta a uma pergunta de "portão" (Você possui X?) sem
  * exigir "1"/"2" — aceita sim/não em qualquer forma, dados já embutidos na
  * resposta ("tenho R$1.200 no Nubank"), ou uma pergunta fora do assunto.
+ *
+ * `expectedKind` é o tipo de item que ESTA pergunta espera ("bill" pra
+ * has_bills, "debt" pra has_debts...). Bug real: se o usuário respondia a
+ * pergunta de dívidas com "Fórum vence dia 10" (um item de CONTA FIXA, sem
+ * relação com dívida), o código antigo marcava a pergunta de dívidas como
+ * respondida mesmo assim — e como a conta não tinha valor, recordBill
+ * falhava e a mensagem inteira era engolida, sem nada gravado e sem nunca
+ * retomar a pergunta original. `matchesGate` deixa o chamador saber se o
+ * item devolvido realmente responde a ESTA pergunta ou só passou de raspão.
  */
 async function interpretGateAnswer(
   userId: string,
   text: string,
   history: Array<{ role: "user" | "assistant"; content: string }>,
+  expectedKind: (typeof FINANCIAL_ITEM_KINDS)[number],
 ): Promise<GateAnswer> {
   const norm = text.trim();
-  if (YES.test(norm) && norm.length <= 20) return { type: "yes", items: [] };
+  if (YES.test(norm) && norm.length <= 20) return { type: "yes", items: [], matchesGate: true };
   if (NO.test(norm) && norm.length <= 20) return { type: "no" };
 
   const { classifyMessage } = await import("@/lib/ai-classify.server");
@@ -276,14 +286,14 @@ async function interpretGateAnswer(
     const reply = await answerOffTopicQuery(userId, intent);
     if (reply) return { type: "query", reply };
   }
-  if (intent?.kind === "confirm_yes") return { type: "yes", items: [] };
+  if (intent?.kind === "confirm_yes") return { type: "yes", items: [], matchesGate: true };
   if (intent?.kind === "confirm_no") return { type: "no" };
 
   const rawItems: any[] = intent?.kind === "bulk" && Array.isArray(intent.items) ? intent.items : intent?.kind ? [intent] : [];
   const items = rawItems.filter((it) => (FINANCIAL_ITEM_KINDS as readonly string[]).includes(it?.kind));
-  if (items.length > 0) return { type: "yes", items };
+  if (items.length > 0) return { type: "yes", items, matchesGate: items.some((it) => it.kind === expectedKind) };
 
-  if (YES.test(norm)) return { type: "yes", items: [] };
+  if (YES.test(norm)) return { type: "yes", items: [], matchesGate: true };
   if (NO.test(norm)) return { type: "no" };
   return { type: "unclear" };
 }
@@ -500,15 +510,24 @@ Enquanto isso já posso registrar:
       answers.goal = norm.slice(0, 120);
       break;
     case "has_bills": {
-      const g = await interpretGateAnswer(userId, norm, history);
+      const g = await interpretGateAnswer(userId, norm, history, "bill");
       if (g.type === "query") { return { handled: true, reply: `${g.reply}\n\n${questionFor("has_bills", answers)}` }; }
       if (g.type === "unclear") {
         return { handled: true, reply: "Não captei — você tem contas fixas mensais (aluguel, luz, internet, academia...)? Pode responder com suas palavras, tipo *\"sim, aluguel e internet\"* ou *\"não tenho\"* 🙂" };
       }
-      answers.has_bills = g.type === "yes";
       if (g.type === "yes" && g.items.length > 0) {
         applyDispatchResult(await dispatchClassifiedItems(userId, g.items));
       }
+      // Item reconhecido não era do assunto desta pergunta (ex.: perguntamos
+      // de contas fixas e a resposta falava de uma dívida) — grava o que foi
+      // dito acima, mas NÃO conta como resposta: retoma a MESMA pergunta em
+      // vez de avançar silenciosamente sem nunca ter sido respondida.
+      if (g.type === "yes" && !g.matchesGate) {
+        advance = false;
+        reply = (confirmText ? `${confirmText}\n\n` : "") + questionFor("has_bills", answers);
+        break;
+      }
+      answers.has_bills = g.type === "yes";
       // Já veio com contas discriminadas na própria resposta → não precisa
       // pedir de novo, pula direto pra próxima pergunta (has_installments).
       if (g.type === "yes" && g.items.length > 0) break;
@@ -544,16 +563,21 @@ Enquanto isso já posso registrar:
       break;
     }
     case "has_installments": {
-      const g = await interpretGateAnswer(userId, norm, history);
+      const g = await interpretGateAnswer(userId, norm, history, "installment");
       if (g.type === "query") { return { handled: true, reply: `${g.reply}\n\n${questionFor("has_installments", answers)}` }; }
       if (g.type === "unclear") {
         return { handled: true, reply: "Não captei — você tem compras parceladas (carnê, financiamento, consórcio...)? Pode responder com suas palavras 🙂" };
       }
-      answers.has_installments = g.type === "yes";
       if (g.type === "yes" && g.items.length > 0) {
         applyDispatchResult(await dispatchClassifiedItems(userId, g.items));
+      }
+      if (g.type === "yes" && !g.matchesGate) {
+        advance = false;
+        reply = (confirmText ? `${confirmText}\n\n` : "") + questionFor("has_installments", answers);
         break;
       }
+      answers.has_installments = g.type === "yes";
+      if (g.type === "yes" && g.items.length > 0) break;
       if (answers.has_installments) {
         await supabaseAdmin.from("onboarding_progress").update({
           current_step: "installments", answers, last_prompt_at: new Date().toISOString(),
@@ -577,16 +601,21 @@ Enquanto isso já posso registrar:
       break;
     }
     case "has_debts": {
-      const g = await interpretGateAnswer(userId, norm, history);
+      const g = await interpretGateAnswer(userId, norm, history, "debt");
       if (g.type === "query") { return { handled: true, reply: `${g.reply}\n\n${questionFor("has_debts", answers)}` }; }
       if (g.type === "unclear") {
         return { handled: true, reply: "Não captei — você tem alguma dívida hoje (cartão, empréstimo, financiamento...)? Pode responder com suas palavras, tipo *\"devo 1200 no Nubank\"* ou *\"não devo nada\"* 🙂" };
       }
-      answers.has_debts = g.type === "yes";
       if (g.type === "yes" && g.items.length > 0) {
         applyDispatchResult(await dispatchClassifiedItems(userId, g.items));
+      }
+      if (g.type === "yes" && !g.matchesGate) {
+        advance = false;
+        reply = (confirmText ? `${confirmText}\n\n` : "") + questionFor("has_debts", answers);
         break;
       }
+      answers.has_debts = g.type === "yes";
+      if (g.type === "yes" && g.items.length > 0) break;
       if (answers.has_debts) {
         await supabaseAdmin.from("onboarding_progress").update({
           current_step: "debts", answers, last_prompt_at: new Date().toISOString(),
