@@ -217,13 +217,31 @@ export const getDashboardStats = createServerFn({ method: "GET" })
         else prevExpense += a;
       }
     }
-    const balance = income - expense;
-    const prevBalance = prevIncome - prevExpense;
-
     // Saldo ATUAL (histórico completo) vem da função oficial do banco — a mesma
     // usada pelo WhatsApp. O período filtra gráficos e KPIs, nunca o saldo real.
     const { fetchFinanceSnapshot } = await import("@/lib/finance-snapshot.server");
     const lifetime = await fetchFinanceSnapshot(supabase, userId);
+
+    // Receita/despesa/saldo do PERÍODO também vêm da mesma fonte oficial —
+    // antes eram uma soma feita à mão em JS sobre os `txs` já buscados, um
+    // segundo caminho de agregação que podia divergir do que o WhatsApp
+    // responderia pro mesmo período (mesma tabela, lógica reimplementada).
+    // A soma manual (loop acima) continua alimentando gráficos/séries/
+    // insights, que não têm equivalente na função SQL — só os KPIs de
+    // cabeçalho passam a vir do snapshot.
+    if (range !== "all" && period.start && period.end) {
+      const periodSnapshot = await fetchFinanceSnapshot(supabase, userId, {
+        from: period.start.toISOString(),
+        to: period.end.toISOString(),
+      });
+      income = periodSnapshot.income;
+      expense = periodSnapshot.expense;
+    } else {
+      income = lifetime.income;
+      expense = lifetime.expense;
+    }
+    const balance = income - expense;
+    const prevBalance = prevIncome - prevExpense;
 
     const savingsRate = income > 0 ? Math.max(0, Math.min(1, (income - expense) / income)) : 0;
     const dim = daysInMonth(now);

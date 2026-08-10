@@ -50,7 +50,12 @@ const TT = {
 
 function DashboardPage() {
   const run = useServerFn(getDashboardStats);
-  const [period, setPeriod] = usePeriodFilter("all");
+  // Padrão "mês atual" — mesmo padrão já estabelecido no WhatsApp
+  // (getMonthBalance/queryBalance só mostram histórico completo quando o
+  // usuário pede explicitamente). Só afeta a primeira visita: quem já tem
+  // um período salvo (localStorage, ver usePeriodFilter) continua vendo o
+  // que escolheu por último.
+  const [period, setPeriod] = usePeriodFilter("month");
   const q = useQuery({
     queryKey: ["dashboard-stats-v2", period.range, period.start ?? null, period.end ?? null],
     queryFn: () => run({ data: { range: period.range, start: period.start, end: period.end } }) as any,
