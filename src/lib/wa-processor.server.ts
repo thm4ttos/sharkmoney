@@ -1753,9 +1753,33 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           });
           return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "bill_partial_payment" };
         }
-        // Sem conta correspondente: NÃO criamos despesa nova aqui. Caímos para
-        // o fluxo normal, mas se for claramente pagamento parcial ("resta X"),
-        // avisamos o usuário para evitar duplicidade.
+        // Nenhuma conta fixa com esse nome — tenta uma compra parcelada
+        // (installment_purchases) antes de desistir. "Paguei o consórcio",
+        // "paguei a parcela do Fórum" etc. precisam virar UMA transação real
+        // (via RPC atômica), não só marcar um contador — ver
+        // payInstallmentPurchase acima (bug real: isso nunca acontecia).
+        if (partial.isFull || typeof partial.paidAmount === "number") {
+          const purchases = await actionsMod.findInstallmentPurchasesByHint(profile.id, partial.hint);
+          if (purchases.length >= 1) {
+            const { sendWhatsAppText } = await import("@/lib/uazapi.server");
+            const r = await actionsMod.payInstallmentPurchase(profile.id, purchases[0].id, {
+              occurredAt: row.created_at,
+            });
+            const sendResult = await sendWhatsAppText(replyPhone, r.replyText);
+            await supabaseAdmin.from("whatsapp_messages").update({
+              ai_intent: "installment_payment",
+              status: sendResult.ok ? "processed" : "send_error",
+            }).eq("id", row.id);
+            await supabaseAdmin.from("whatsapp_messages").insert({
+              user_id: profile.id, phone: replyPhone, direction: "out", media_type: "text",
+              content: r.replyText, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
+            });
+            return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "installment_payment" };
+          }
+        }
+        // Sem conta nem parcelamento correspondente: NÃO criamos despesa nova
+        // aqui. Caímos para o fluxo normal, mas se for claramente pagamento
+        // parcial ("resta X"), avisamos o usuário para evitar duplicidade.
         if ((partial.remainingAmount || partial.percentRemaining) && !partial.paidAmount) {
           const { sendWhatsAppText } = await import("@/lib/uazapi.server");
           const msg = "Não encontrei essa conta fixa cadastrada para atualizar o saldo. Se quiser, me diga o *nome exato* da conta (ex.: _paguei 200 do aluguel do carro_) ou cadastre a conta antes.";

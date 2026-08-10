@@ -3131,30 +3131,31 @@ export async function applyPartialBillPayment(
 
   if (done) {
     // Contratos com prazo determinado (consórcio/financiamento): dar baixa em
-    // UMA parcela, nunca no contrato inteiro.
+    // UMA parcela, nunca no contrato inteiro. O incremento de
+    // paid_installments já aconteceu DENTRO da RPC atômica acima (mesma
+    // transação SQL do pagamento) — não fazemos um segundo .update() aqui,
+    // que antes rodava separado e sem garantia de atomicidade com o
+    // pagamento em si.
     const info = billInstallmentInfo(bill);
     if (info.isInstallment) {
-      const paidCount = Math.min(info.total, info.paid + 1);
-      const remainingCount = Math.max(0, info.total - paidCount);
-      const settled = remainingCount === 0;
-      await supabaseAdmin
-        .from("recurring_bills")
-        .update({ paid_installments: paidCount, active: settled ? false : (bill as any).active })
-        .eq("id", billId).eq("user_id", userId);
+      const paidCount = Number(atomic.paid_installments ?? info.paid);
+      const totalCount = Number(atomic.installments_total ?? info.total);
+      const remainingCount = Math.max(0, totalCount - paidCount);
+      const settled = !!atomic.installment_settled;
 
       return {
         ok: true,
         replyText: settled
           ? `🎉 *${(bill as any).title}* QUITADO!
 
-💸 Parcela paga: *${info.total} de ${info.total}*
+💸 Parcela paga: *${totalCount} de ${totalCount}*
 💰 Valor: *${BRL(paidNow)}*
 ✅ Não há mais parcelas nem lembretes.
 
 💰 Saldo do mês: *${BRL(bal.balance)}*`
           : `✅ Parcela do *${(bill as any).title}* registrada!
 
-💸 Parcela paga: *${paidCount} de ${info.total}*
+💸 Parcela paga: *${paidCount} de ${totalCount}*
 💰 Valor: *${BRL(paidNow)}*
 📊 Restam: *${remainingCount} parcelas*
 📅 Próximo vencimento: ${nextDueAt.split("-").reverse().join("/")}
@@ -3211,6 +3212,97 @@ export async function findBillsByHint(userId: string, hint: string): Promise<any
     return { b, score };
   }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
   return scored.map((x) => x.b);
+}
+
+/** Localiza compras parceladas (installment_purchases) ATIVAS por hint textual. */
+export async function findInstallmentPurchasesByHint(userId: string, hint: string): Promise<any[]> {
+  const { data } = await supabaseAdmin
+    .from("installment_purchases")
+    .select("id, title, total_amount, installments_total, installments_paid, first_due_at, category")
+    .eq("user_id", userId)
+    .eq("active", true);
+  const list = (data ?? []) as any[];
+  const h = (hint || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (!h) return list;
+  const tokens = h.split(/\s+/).filter((w) => w.length >= 3);
+  if (tokens.length === 0) return [];
+  const scored = list.map((p) => {
+    const t = String(p.title || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    let score = 0;
+    for (const w of tokens) if (t.includes(w)) score += w.length;
+    return { p, score };
+  }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
+  return scored.map((x) => x.p);
+}
+
+/**
+ * Registra o pagamento de UMA parcela de installment_purchases via RPC
+ * at\u00f4mica `pay_installment_atomic` \u2014 a MESMA fun\u00e7\u00e3o j\u00e1 usada pelo site
+ * (src/lib/installments.functions.ts:payInstallment), nunca uma segunda
+ * implementa\u00e7\u00e3o. Antes, o WhatsApp n\u00e3o tinha NENHUM caminho pra isso:
+ * marcar uma parcela como paga (applyInstallmentFollowUp) nunca criava a
+ * despesa correspondente nem mexia no saldo \u2014 ao contr\u00e1rio do fluxo
+ * equivalente pra conta fixa, que sempre teve register_bill_payment_atomic.
+ */
+export async function payInstallmentPurchase(
+  userId: string,
+  purchaseId: string,
+  opts: { occurredAt?: string } = {},
+): Promise<{ ok: boolean; replyText: string }> {
+  const { data: result, error } = await supabaseAdmin.rpc("pay_installment_atomic", {
+    p_user_id: userId,
+    p_purchase_id: purchaseId,
+    p_occurred_at: opts.occurredAt ?? new Date().toISOString(),
+    p_channel: "whatsapp",
+  });
+  if (error || !result || typeof result !== "object" || Array.isArray(result)) {
+    console.error("[actions] payInstallmentPurchase atomic FAIL", {
+      userId, purchaseId, message: error?.message ?? null, code: (error as any)?.code ?? null,
+    });
+    return { ok: false, replyText: "N\u00e3o foi poss\u00edvel registrar esse pagamento agora. Nenhuma altera\u00e7\u00e3o foi realizada. Tente novamente em alguns instantes." };
+  }
+  const atomic = result as Record<string, unknown>;
+  if (atomic.already_done) {
+    return { ok: true, replyText: "Essa compra parcelada j\u00e1 est\u00e1 totalmente quitada \u2014 n\u00e3o h\u00e1 mais parcelas pendentes. \ud83d\udc4d" };
+  }
+  const { data: purchase } = await supabaseAdmin
+    .from("installment_purchases")
+    .select("title, first_due_at")
+    .eq("id", purchaseId).eq("user_id", userId).maybeSingle();
+  const title = (purchase as any)?.title ?? "Compra parcelada";
+  const paidNumber = Number(atomic.paid_number ?? 0);
+  const total = Number(atomic.installments_total ?? 0);
+  const paidAmount = Number(atomic.paid_amount ?? 0);
+  const finished = !!atomic.finished;
+  const bal = await getMonthBalance(userId);
+
+  if (finished) {
+    return {
+      ok: true,
+      replyText:
+`\ud83c\udf89 *${title}* QUITADA!
+
+\ud83d\udcb8 Parcela paga: *${paidNumber} de ${total}*
+\ud83d\udcb0 Valor: *${BRL(paidAmount)}*
+\u2705 N\u00e3o h\u00e1 mais parcelas pendentes.
+
+\ud83d\udcb0 Saldo do m\u00eas: *${BRL(bal.balance)}*`,
+    };
+  }
+  const { installmentDueDate } = await import("@/lib/installments-dates");
+  const nextDueAt = (purchase as any)?.first_due_at
+    ? installmentDueDate(String((purchase as any).first_due_at), paidNumber + 1)
+    : null;
+  return {
+    ok: true,
+    replyText:
+`\u2705 Parcela do *${title}* registrada!
+
+\ud83d\udcb8 Parcela paga: *${paidNumber} de ${total}*
+\ud83d\udcb0 Valor: *${BRL(paidAmount)}*${nextDueAt ? `\n\ud83d\udcc5 Pr\u00f3ximo vencimento: ${formatYMDBr(nextDueAt)}` : ""}
+
+\ud83d\udcb0 Saldo do m\u00eas: *${BRL(bal.balance)}*`,
+  };
 }
 
 // ================================================================
