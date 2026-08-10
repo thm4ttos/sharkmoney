@@ -305,6 +305,21 @@ function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; ask?: an
     return { kind: "query_goals" };
   }
 
+  // ----- Renda mensal cadastrada (PERFIL, não movimentação) -----
+  // Bug real: "qual minha renda mensal?" caía em query_summary/buildReport
+  // ("nenhuma movimentação registrada") porque renda mensal cadastrada é
+  // dado de PERFIL (planejamento), não uma transação — e essa separação
+  // existia só dentro do prompt da IA, sem nenhuma guarda determinística
+  // (diferente de todo o resto deste roteador). Sem valor na frase = é
+  // pergunta; com valor ("minha renda é 20 mil") é atualização — isso
+  // continua indo pra IA (update_profile), não entra aqui.
+  if (
+    isQuery && !hasDigitCue &&
+    /\b(renda|sal[áa]rio)\s+mensal\b|\bqual\s+(a\s+)?(minha\s+)?renda\b|\bquanto\s+(eu\s+)?ganho\b/i.test(t)
+  ) {
+    return { kind: "query_profile", profile_field: "income" };
+  }
+
   // ----- Dívidas -----
   if (isQuery && !hasDigitCue && /\b(divida|dividas|devendo|devo|emprestimo|empréstimo)\b/i.test(t)) {
     return { kind: "query_debts" };
