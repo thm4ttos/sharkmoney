@@ -1469,7 +1469,10 @@ function clampDayInMonth(y: number, m: number, day: number): number {
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return Math.min(Math.max(1, day), last);
 }
-function ymd(y: number, m: number, d: number): string {
+// Nome diferente de propósito: já existe um ymd(d: Date) mais abaixo no
+// arquivo (formata uma data existente); este monta uma data a partir de
+// ano/mês/dia soltos — mesmo nome causaria colisão de símbolo no build.
+function ymdParts(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
@@ -1478,10 +1481,10 @@ function currentInvoiceCycle(closingDay: number): { cycleStart: string; cycleEnd
   const { y, m, d } = spToday();
   let ny = y, nm = m;
   if (d > closingDay) { nm += 1; if (nm > 12) { nm = 1; ny += 1; } }
-  const cycleEnd = ymd(ny, nm, clampDayInMonth(ny, nm, closingDay));
+  const cycleEnd = ymdParts(ny, nm, clampDayInMonth(ny, nm, closingDay));
   let py = ny, pm = nm - 1;
   if (pm < 1) { pm = 12; py -= 1; }
-  const cycleStart = ymd(py, pm, clampDayInMonth(py, pm, closingDay));
+  const cycleStart = ymdParts(py, pm, clampDayInMonth(py, pm, closingDay));
   return { cycleStart, cycleEnd };
 }
 
