@@ -7,8 +7,16 @@ export type BillInstallmentPatch = {
   total_installments?: number;
   paid_installments?: number;
   payment_day?: number;
+  /** Data completa explícita (YYYY-MM-DD) — "dia 10 de dezembro de 2026", "10/12/2026". Mais específica que payment_day; quem aplica o patch deve preferir esta quando ambas vierem preenchidas. */
+  next_due_at?: string;
   frequency?: string;
   amount?: number;
+};
+
+const MONTH_NAMES: Record<string, number> = {
+  janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7,
+  agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
+  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
 };
 
 const COUNT_WORD = String.raw`x|vezes|parcelas?|prestac(?:oes|ao)|mensalidades?|pagamentos?|meses`;
@@ -113,6 +121,43 @@ export function parseCorrectedAmount(raw: string): number | null {
 }
 
 /**
+ * Data completa explícita, com mês (e opcionalmente ano): "dia 10 de
+ * dezembro", "10 de dezembro de 2026", "10/12/2026". Mais específica que
+ * parsePaymentDay (que só pega o dia solto, "dia 10", perdendo o mês) —
+ * bug real observado: "mudar a data... pro dia 10 de dezembro de 2026"
+ * virava só "dia 10" e resolvia pro mês ERRADO (o mais próximo a partir de
+ * hoje, não dezembro).
+ */
+export function parseExplicitDate(raw: string): string | null {
+  const t = norm(raw);
+
+  // "10/12/2026" ou "10-12-2026"
+  let m = t.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
+  if (m) {
+    const d = Number(m[1]), mo = Number(m[2]);
+    let y = m[3] ? Number(m[3]) : new Date().getFullYear();
+    if (y < 100) y += 2000;
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) {
+      return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+  }
+
+  // "10 de dezembro" / "dia 10 de dezembro de 2026"
+  m = t.match(/\b(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b(?:\s+de\s+(\d{2,4}))?/);
+  if (m) {
+    const d = Number(m[1]);
+    const mo = MONTH_NAMES[m[2]];
+    let y = m[3] ? Number(m[3]) : new Date().getFullYear();
+    if (y < 100) y += 2000;
+    if (d >= 1 && d <= 31 && mo) {
+      return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Interpreta uma mensagem complementar sobre uma conta/parcelamento já
  * criado. Genérico o bastante para `recurring_bills` (conta fixa com prazo)
  * e `installment_purchases` (compra parcelada) — ambos usam a mesma forma
@@ -124,6 +169,8 @@ export function parseBillFollowUp(raw: string, total?: number | null): BillInsta
   if (totalParsed) patch.total_installments = totalParsed;
   const paid = parsePaidInstallments(raw, totalParsed ?? total ?? null);
   if (paid !== null) patch.paid_installments = paid;
+  const explicitDate = parseExplicitDate(raw);
+  if (explicitDate) patch.next_due_at = explicitDate;
   const day = parsePaymentDay(raw);
   if (day) patch.payment_day = day;
   const correctedAmount = parseCorrectedAmount(raw);

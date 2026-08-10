@@ -1564,11 +1564,28 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     if (!imageUrl && !pending && inputText) {
       const actionsMod = await import("@/lib/brinzap-actions.server");
 
+      // ⚠️ Bug real e grave já observado em produção: "Compra parcelada mudar
+      // pro dia 5" foi capturado por detectPreviousEntryEditIntent (que só
+      // conhece "a última TRANSAÇÃO") e alterou a data de um comprovante de
+      // gás completamente sem relação, só porque a frase também batia com
+      // "mudar" + "dia N". Essas três detecções abaixo (0a/0a-2/0b) falam
+      // apenas de TRANSAÇÕES — nunca podem roubar uma frase que claramente é
+      // sobre um parcelamento/conta fixa/consórcio, ou uma referência
+      // numérica à lista que acabou de ser mostrada ("2 vence dia 15",
+      // "corrige o 1 pra R$900"). Nesses casos, quem decide é o bloco de
+      // parcelamentos/contas mais abaixo — nunca "a última transação".
+      const looksLikeModuleReference =
+        /\b(parcela|parcelas|parcelamento|parcelamentos|parcelad[ao]s?|cons[óo]rcio|conta\s+fixa)\b/i.test(inputText) ||
+        (!!lastCtx?.installments_list?.length && (
+          /^\s*\d{1,2}\b/.test(normalized) ||
+          /\b(?:o|a|item|numero|n[úu]mero)\s+\d{1,2}\b/i.test(normalized)
+        ));
+
       // 0a) Edição do lançamento anterior por linguagem natural ("foi ontem",
       //     "muda a data", "isso foi dia 22", "coloca em mercado", "apaga isso").
       //     Tem prioridade ABSOLUTA sobre consulta/relatório — se o usuário
       //     está corrigindo um registro, jamais devolver um relatório.
-      const prevEdit = actionsMod.detectPreviousEntryEditIntent(inputText);
+      const prevEdit = looksLikeModuleReference ? null : actionsMod.detectPreviousEntryEditIntent(inputText);
       if (prevEdit) {
         const { sendWhatsAppText } = await import("@/lib/uazapi.server");
         const r = await actionsMod.applyEditToLastTransaction(profile.id, prevEdit);
@@ -1588,7 +1605,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       // 0a-2) CORREÇÃO DE VALOR explícita ("não foi sete, foi dezessete",
       //       "corrigindo: 17 reais", "errei, era 17"). Atualiza o último
       //       lançamento — NUNCA cria um novo. Uma ação = uma confirmação.
-      const amountFix = actionsMod.detectAmountCorrectionIntent(inputText);
+      const amountFix = looksLikeModuleReference ? null : actionsMod.detectAmountCorrectionIntent(inputText);
       if (amountFix) {
         const { sendWhatsAppText } = await import("@/lib/uazapi.server");
         const r = await actionsMod.correctLastTransaction(profile.id, {
@@ -1610,7 +1627,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       // 0b) Pedido de CORREÇÃO / reclamação ("não reconheceu", "ficou errado",
       //    "era R$ 200", "corrigir"): NUNCA executar mudança financeira aqui.
       //    Pedimos esclarecimento antes para evitar duplicidade e erro de valor.
-      const correction = actionsMod.detectCorrectionRequestIntent(inputText);
+      const correction = looksLikeModuleReference ? null : actionsMod.detectCorrectionRequestIntent(inputText);
       if (correction) {
         const { sendWhatsAppText } = await import("@/lib/uazapi.server");
         const sendResult = await sendWhatsAppText(replyPhone, correction.replyText);

@@ -1175,7 +1175,13 @@ export async function applyBillInstallmentFollowUp(
   if (typeof patch.paid_installments === "number") {
     update.paid_installments = total ? Math.min(total, patch.paid_installments) : patch.paid_installments;
   }
-  if (patch.payment_day) {
+  // next_due_at explícito ("dia 10 de dezembro de 2026") é mais específico
+  // que payment_day sozinho ("dia 10", que perde o mês) — vence primeiro.
+  if (patch.next_due_at) {
+    update.next_due_at = patch.next_due_at;
+    update.payment_day = Number(patch.next_due_at.slice(8, 10));
+    if (!(bill as any).first_due_date) update.first_due_date = patch.next_due_at;
+  } else if (patch.payment_day) {
     update.payment_day = patch.payment_day;
     update.next_due_at = nextDueFromDaySP(patch.payment_day);
     if (!(bill as any).first_due_date) update.first_due_date = update.next_due_at;
@@ -1459,7 +1465,11 @@ export async function applyInstallmentFollowUp(
   if (typeof patch.paid_installments === "number") {
     update.paid_installments = Math.min(newTotal, patch.paid_installments);
   }
-  if (patch.payment_day && patch.payment_day >= 1 && patch.payment_day <= 31) {
+  // next_due_at explícito ("dia 10 de dezembro de 2026") é mais específico
+  // que payment_day sozinho ("dia 10", que perde o mês e resolvia errado).
+  if (patch.next_due_at) {
+    update.first_due_at = patch.next_due_at;
+  } else if (patch.payment_day && patch.payment_day >= 1 && patch.payment_day <= 31) {
     update.first_due_at = nextDueFromDaySP(patch.payment_day);
   }
   if (Object.keys(update).length === 0) return { ok: false, replyText: "" };
