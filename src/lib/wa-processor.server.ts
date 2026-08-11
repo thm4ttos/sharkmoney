@@ -1814,6 +1814,28 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         });
         return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "bill_paid_auto" };
       }
+      // Nenhuma conta fixa "aguardando pagamento" com esse nome — tenta uma
+      // compra parcelada (installment_purchases) antes de desistir. Bug real:
+      // "Paguei o consórcio" (sem valor) só era reconhecido por ESTE detector
+      // (o de pagamento total), não pelo de pagamento parcial — a Fase 7
+      // original só tinha corrigido o segundo, deixando esta frase exata cair
+      // até o chat genérico sem registrar nada.
+      const purchases = await actionsMod.findInstallmentPurchasesByHint(profile.id, inputText);
+      if (purchases.length >= 1) {
+        const { sendWhatsAppText } = await import("@/lib/uazapi.server");
+        const r = await actionsMod.payInstallmentPurchase(profile.id, purchases[0].id, {
+          occurredAt: row.created_at,
+        });
+        const sendResult = await sendWhatsAppText(replyPhone, r.replyText);
+        await supabaseAdmin.from("whatsapp_messages").update({
+          ai_intent: "installment_payment", status: sendResult.ok ? "processed" : "send_error",
+        }).eq("id", row.id);
+        await supabaseAdmin.from("whatsapp_messages").insert({
+          user_id: profile.id, phone: replyPhone, direction: "out", media_type: "text",
+          content: r.replyText, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
+        });
+        return { ok: sendResult.ok, status: sendResult.ok ? "processed" : "send_error", intent: "installment_payment" };
+      }
     }
 
 
