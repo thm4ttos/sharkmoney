@@ -3735,6 +3735,64 @@ export async function confirmDeleteEntry(
   pending: { target: DeleteTarget; id: string; label?: string },
 ): Promise<{ ok: boolean; replyText: string }> {
   try {
+    // Excluir uma TRANSAÇÃO vinculada a um pagamento de conta fixa/parcela
+    // precisa desfazer esse vínculo — nunca um .delete() puro. Bug real
+    // (mesma causa raiz do lado do site, corrigida junto): apagar a
+    // transação de "paguei o consórcio" não devolvia a parcela pra
+    // pendente, deixando installments_paid incrementado pra sempre com a
+    // transação já apagada.
+    if (pending.target === "transaction" || pending.target === "transaction_income") {
+      const { data: tx } = await supabaseAdmin
+        .from("transactions")
+        .select("id, source_type, source_id")
+        .eq("id", pending.id).eq("user_id", userId).maybeSingle();
+
+      const { data: linkedPayment } = await supabaseAdmin
+        .from("bill_payments")
+        .select("id")
+        .eq("transaction_id", pending.id).eq("user_id", userId).maybeSingle();
+
+      if (linkedPayment) {
+        // reverse_bill_payment_atomic já apaga a transação, o pagamento e
+        // reabre a conta fixa — mesma RPC usada pela Auditoria Financeira.
+        const { error } = await supabaseAdmin.rpc("reverse_bill_payment_atomic", {
+          p_user_id: userId, p_payment_id: (linkedPayment as any).id,
+        });
+        if (error) {
+          console.error("[actions] confirmDeleteEntry reverse_bill_payment_atomic", error);
+          return { ok: false, replyText: "Não consegui excluir agora 🙏. Tenta de novo em instantes." };
+        }
+      } else if ((tx as any)?.source_type === "installment_purchase" && (tx as any)?.source_id) {
+        const { data: purchase } = await supabaseAdmin
+          .from("installment_purchases")
+          .select("id, installments_paid")
+          .eq("id", (tx as any).source_id).eq("user_id", userId).maybeSingle();
+        if (purchase) {
+          await supabaseAdmin.from("installment_purchases").update({
+            installments_paid: Math.max(0, Number((purchase as any).installments_paid) - 1),
+            active: true,
+            updated_at: new Date().toISOString(),
+          }).eq("id", (purchase as any).id).eq("user_id", userId);
+        }
+        const { error } = await supabaseAdmin.from("transactions").delete().eq("id", pending.id).eq("user_id", userId);
+        if (error) {
+          console.error("[actions] confirmDeleteEntry", error);
+          return { ok: false, replyText: "Não consegui excluir agora 🙏. Tenta de novo em instantes." };
+        }
+      } else {
+        const { error } = await supabaseAdmin.from("transactions").delete().eq("id", pending.id).eq("user_id", userId);
+        if (error) {
+          console.error("[actions] confirmDeleteEntry", error);
+          return { ok: false, replyText: "Não consegui excluir agora 🙏. Tenta de novo em instantes." };
+        }
+      }
+      const bal = await getMonthBalance(userId);
+      return {
+        ok: true,
+        replyText: `✅ Excluído${pending.label ? `: *${pending.label}*` : ""}.\n\n💰 Saldo do mês: *${BRL(bal.balance)}*`,
+      };
+    }
+
     let table: string;
     switch (pending.target) {
       case "bill": table = "recurring_bills"; break;
@@ -3742,9 +3800,6 @@ export async function confirmDeleteEntry(
       case "debt": table = "debts"; break;
       case "goal": table = "financial_goals"; break;
       case "installment": table = "installment_purchases"; break;
-      case "transaction":
-      case "transaction_income":
-        table = "transactions"; break;
       default:
         return { ok: false, replyText: "Não consegui identificar o que excluir." };
     }

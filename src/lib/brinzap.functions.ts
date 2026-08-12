@@ -239,15 +239,23 @@ export const createTransaction = createServerFn({ method: "POST" })
     });
   });
 
+// Delega pra RPC atômica audit_delete_transaction (mesma usada pela
+// Auditoria Financeira) em vez de um .delete() puro. Bug real: apagar uma
+// transação vinculada a um pagamento de parcela/conta fixa aqui nunca
+// desfazia o vínculo — o installment_purchases.installments_paid (ou o
+// recurring_bills correspondente) ficava incrementado pra sempre, mesmo com
+// a transação apagada. A RPC já trata os três casos (conta fixa vinculada,
+// compra parcelada vinculada, ou nenhum vínculo) — não duplicar essa lógica
+// aqui.
 export const deleteTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("transactions")
-      .delete()
-      .eq("id", data.id)
-      .eq("user_id", context.userId);
+    const { error } = await (context.supabase as any).rpc("audit_delete_transaction", {
+      p_transaction_id: data.id,
+      p_mode: "plain",
+      p_reason: null,
+    });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
