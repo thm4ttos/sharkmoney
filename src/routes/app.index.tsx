@@ -252,7 +252,7 @@ function HomePage() {
           <div className="flex items-center justify-between">
             <h2 className="font-display text-xl">Últimos lançamentos</h2>
             {latestRows.length > 0 && (
-              <Link to="/app/transacoes" className="text-xs text-primary hover:underline">Ver todos</Link>
+              <Link to="/app/transacoes" search={{ kind: undefined, view: "lista" }} className="text-xs text-primary hover:underline">Ver todos</Link>
             )}
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">Mesma fonte de dados da aba Transações.</p>
@@ -325,7 +325,7 @@ function HomePage() {
           {categoryGroups.slice(0, 12).map((g) => {
             const Icon = g.icon;
             return (
-              <Link key={g.key} to="/app/categorias" className="rounded-2xl border border-border bg-background/40 p-4 hover:border-primary/40 hover:scale-[1.02] transition-smooth group">
+              <Link key={g.key} to="/app/transacoes" search={{ kind: undefined, view: "categorias" }} className="rounded-2xl border border-border bg-background/40 p-4 hover:border-primary/40 hover:scale-[1.02] transition-smooth group">
                 <div className={`${g.color}`}><Icon className="h-5 w-5" /></div>
                 <p className="text-sm mt-3 group-hover:text-primary transition-smooth">{g.name}</p>
                 <p className="text-[11px] text-muted-foreground">{g.categories.length} categorias</p>

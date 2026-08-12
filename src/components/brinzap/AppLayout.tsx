@@ -11,7 +11,7 @@ import { MobileBottomNav } from "@/components/brinzap/MobileBottomNav";
 import { DesktopSidebar } from "@/components/brinzap/DesktopSidebar";
 
 import {
-  LayoutDashboard, Home, Zap, ArrowLeftRight, FolderTree, PiggyBank,
+  LayoutDashboard, Home, Zap, ArrowLeftRight, PiggyBank,
   CreditCard, AlertTriangle, Sparkles, Bell, FileBarChart2, Wallet,
   LifeBuoy, User as UserIcon, LogOut, MessageCircle, Menu, X, CalendarDays, Target, Repeat, Upload, Handshake, Heart, type LucideIcon
 } from "lucide-react";
@@ -29,7 +29,6 @@ const nav: NavItem[] = [
   { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },
   { to: "/app/importar", label: "Importar Histórico", icon: Upload },
   { to: "/app/whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { to: "/app/categorias", label: "Categorias", icon: FolderTree },
   { to: "/app/orcamento", label: "Orçamento", icon: PiggyBank },
   { to: "/app/parcelados", label: "Compras Parceladas", icon: CreditCard },
   { to: "/app/dividas", label: "Dívidas", icon: AlertTriangle },

@@ -1,4 +1,3 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -28,10 +27,6 @@ import {
   updateTransaction,
 } from "@/lib/brinzap.functions";
 import { toast } from "sonner";
-
-export const Route = createFileRoute("/app/categorias")({
-  component: CategoriesPage,
-});
 
 type Kind = "all" | "income" | "expense";
 type Preset =
@@ -87,7 +82,7 @@ function groupOfCategory(cat: string) {
   return g ?? categoryGroups[categoryGroups.length - 1];
 }
 
-function CategoriesPage() {
+export function CategoriasView() {
   const [kind, setKind] = useState<Kind>("all");
   const [preset, setPreset] = useState<Preset>("30d");
   const [customStart, setCustomStart] = useState<Date | undefined>();
@@ -125,19 +120,7 @@ function CategoriesPage() {
   }, [data]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16">
-      <header className="flex items-center gap-4">
-        <div className="h-14 w-14 grid place-items-center rounded-2xl border border-border bg-gradient-to-br from-primary/20 to-primary/5 backdrop-blur-xl">
-          <FolderTree className="h-6 w-6 text-primary" />
-        </div>
-        <div>
-          <h1 className="font-display text-3xl">Categorias</h1>
-          <p className="text-sm text-muted-foreground">
-            Análise inteligente dos seus lançamentos por categoria
-          </p>
-        </div>
-      </header>
-
+    <div className="space-y-6">
       {/* Filters */}
       <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-4 space-y-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -562,7 +545,7 @@ function CategoryDrawer({
         r.source ?? "",
       ].join(";"));
     }
-    const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = `${category}-lancamentos.csv`; a.click();

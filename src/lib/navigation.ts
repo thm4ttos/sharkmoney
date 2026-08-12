@@ -1,6 +1,6 @@
 import {
   Home, User as UserIcon, ArrowLeftRight, Bell, Sparkles, Zap,
-  Wallet, CalendarDays, Repeat, CreditCard, PiggyBank, FolderTree,
+  Wallet, CalendarDays, Repeat, CreditCard, PiggyBank,
   AlertTriangle, Target, Crown, FileBarChart2, Upload, MessageCircle,
   Settings, LifeBuoy, ShieldCheck, Heart,
   type LucideIcon,
@@ -33,7 +33,6 @@ export const navigationSections: NavSection[] = [
       { to: "/app/contas-fixas", label: "Contas Fixas", icon: Repeat },
       { to: "/app/parcelados", label: "Compras Parceladas", icon: CreditCard },
       { to: "/app/orcamento", label: "Orçamento", icon: PiggyBank },
-      { to: "/app/categorias", label: "Categorias", icon: FolderTree },
       { to: "/app/dividas", label: "Dívidas", icon: AlertTriangle },
       { to: "/app/metas", label: "Metas", icon: Target },
       { to: "/app/casal", label: "Casal", icon: Heart },

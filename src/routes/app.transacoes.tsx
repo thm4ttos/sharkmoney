@@ -6,13 +6,15 @@ import { formatBRL, groupOf, categoryGroups } from "@/lib/user-mock";
 import { listTransactions, deleteTransaction, updateTransaction } from "@/lib/brinzap.functions";
 import { resetUserHistory } from "@/lib/user-extras.functions";
 import { formatDateSP, toDateInputSP, dateInputSPToIso } from "@/lib/datetime";
-import { Search, MessageCircle, Loader2, Pencil, Trash2, X, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react";
+import { Search, MessageCircle, Loader2, Pencil, Trash2, X, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ShieldCheck, List, FolderTree } from "lucide-react";
 import { AuditDetails } from "@/components/brinzap/transactions/AuditDetails";
+import { CategoriasView } from "@/components/brinzap/transactions/CategoriasView";
 
 
 export const Route = createFileRoute("/app/transacoes")({
   validateSearch: (s: Record<string, unknown>) => ({
     kind: (s.kind === "income" || s.kind === "expense" ? s.kind : undefined) as "income" | "expense" | undefined,
+    view: (s.view === "categorias" ? "categorias" : "lista") as "lista" | "categorias",
   }),
   component: TxPage,
 });
@@ -28,6 +30,7 @@ const PAGE_SIZES = [10, 20, 50, 100, 250];
 function TxPage() {
   const qc = useQueryClient();
   const search = Route.useSearch();
+  const [view, setView] = useState<"lista" | "categorias">(search.view);
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [filterGroup, setFilterGroup] = useState<string>("all");
@@ -124,16 +127,40 @@ function TxPage() {
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
-      <header>
-        <p className="text-xs uppercase tracking-[0.2em] text-primary">Histórico</p>
-        <h1 className="font-display text-3xl mt-1">Transações</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {total.toLocaleString("pt-BR")} {total === 1 ? "transação encontrada" : "transações encontradas"}
-          {total > 0 && <> · exibindo {showingFrom.toLocaleString("pt-BR")}–{showingTo.toLocaleString("pt-BR")}</>}
-          {hasActiveFilters && <> (com filtros aplicados)</>}.
-        </p>
+      <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-primary">Histórico</p>
+          <h1 className="font-display text-3xl mt-1">Transações</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {view === "lista"
+              ? <>
+                  {total.toLocaleString("pt-BR")} {total === 1 ? "transação encontrada" : "transações encontradas"}
+                  {total > 0 && <> · exibindo {showingFrom.toLocaleString("pt-BR")}–{showingTo.toLocaleString("pt-BR")}</>}
+                  {hasActiveFilters && <> (com filtros aplicados)</>}.
+                </>
+              : "Análise inteligente dos seus lançamentos por categoria."}
+          </p>
+        </div>
+        <div className="inline-flex rounded-xl border border-border bg-card/60 p-1 shrink-0">
+          <button
+            onClick={() => setView("lista")}
+            className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm transition-smooth ${view === "lista" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <List className="h-4 w-4" /> Lista
+          </button>
+          <button
+            onClick={() => setView("categorias")}
+            className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm transition-smooth ${view === "categorias" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <FolderTree className="h-4 w-4" /> Categorias
+          </button>
+        </div>
       </header>
 
+      {view === "categorias" ? (
+        <CategoriasView />
+      ) : (
+      <>
       <div className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -297,6 +324,8 @@ function TxPage() {
           </div>
         )}
       </div>
+      </>
+      )}
 
 
       {/* Zerar todos os dados */}

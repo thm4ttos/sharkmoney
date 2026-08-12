@@ -38,7 +38,6 @@ import { Route as AppDebugPerfilRouteImport } from './routes/app.debug-perfil'
 import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
 import { Route as AppContasFixasRouteImport } from './routes/app.contas-fixas'
 import { Route as AppCompromissosRouteImport } from './routes/app.compromissos'
-import { Route as AppCategoriasRouteImport } from './routes/app.categorias'
 import { Route as AppCasalDashboardRouteImport } from './routes/app.casal-dashboard'
 import { Route as AppCasalRouteImport } from './routes/app.casal'
 import { Route as AppCalendarioRouteImport } from './routes/app.calendario'
@@ -216,11 +215,6 @@ const AppContasFixasRoute = AppContasFixasRouteImport.update({
 const AppCompromissosRoute = AppCompromissosRouteImport.update({
   id: '/compromissos',
   path: '/compromissos',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppCategoriasRoute = AppCategoriasRouteImport.update({
-  id: '/categorias',
-  path: '/categorias',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCasalDashboardRoute = AppCasalDashboardRouteImport.update({
@@ -425,7 +419,6 @@ export interface FileRoutesByFullPath {
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
-  '/app/categorias': typeof AppCategoriasRoute
   '/app/compromissos': typeof AppCompromissosRoute
   '/app/contas-fixas': typeof AppContasFixasRoute
   '/app/dashboard': typeof AppDashboardRoute
@@ -488,7 +481,6 @@ export interface FileRoutesByTo {
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
-  '/app/categorias': typeof AppCategoriasRoute
   '/app/compromissos': typeof AppCompromissosRoute
   '/app/contas-fixas': typeof AppContasFixasRoute
   '/app/dashboard': typeof AppDashboardRoute
@@ -554,7 +546,6 @@ export interface FileRoutesById {
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
-  '/app/categorias': typeof AppCategoriasRoute
   '/app/compromissos': typeof AppCompromissosRoute
   '/app/contas-fixas': typeof AppContasFixasRoute
   '/app/dashboard': typeof AppDashboardRoute
@@ -621,7 +612,6 @@ export interface FileRouteTypes {
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
-    | '/app/categorias'
     | '/app/compromissos'
     | '/app/contas-fixas'
     | '/app/dashboard'
@@ -684,7 +674,6 @@ export interface FileRouteTypes {
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
-    | '/app/categorias'
     | '/app/compromissos'
     | '/app/contas-fixas'
     | '/app/dashboard'
@@ -749,7 +738,6 @@ export interface FileRouteTypes {
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
-    | '/app/categorias'
     | '/app/compromissos'
     | '/app/contas-fixas'
     | '/app/dashboard'
@@ -1014,13 +1002,6 @@ declare module '@tanstack/react-router' {
       path: '/compromissos'
       fullPath: '/app/compromissos'
       preLoaderRoute: typeof AppCompromissosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/categorias': {
-      id: '/app/categorias'
-      path: '/categorias'
-      fullPath: '/app/categorias'
-      preLoaderRoute: typeof AppCategoriasRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/casal-dashboard': {
@@ -1313,7 +1294,6 @@ interface AppRouteChildren {
   AppCalendarioRoute: typeof AppCalendarioRoute
   AppCasalRoute: typeof AppCasalRoute
   AppCasalDashboardRoute: typeof AppCasalDashboardRoute
-  AppCategoriasRoute: typeof AppCategoriasRoute
   AppCompromissosRoute: typeof AppCompromissosRoute
   AppContasFixasRoute: typeof AppContasFixasRoute
   AppDashboardRoute: typeof AppDashboardRoute
@@ -1342,7 +1322,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppCalendarioRoute: AppCalendarioRoute,
   AppCasalRoute: AppCasalRoute,
   AppCasalDashboardRoute: AppCasalDashboardRoute,
-  AppCategoriasRoute: AppCategoriasRoute,
   AppCompromissosRoute: AppCompromissosRoute,
   AppContasFixasRoute: AppContasFixasRoute,
   AppDashboardRoute: AppDashboardRoute,
