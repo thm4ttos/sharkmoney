@@ -84,9 +84,23 @@ export const createCoupleInvite = createServerFn({ method: "POST" })
       `💙 *${requesterName}* te convidou pro *Modo Casal* do Abio — depois de aceitar, vocês passam a ver as receitas e despesas um do outro automaticamente, num painel só do casal.`,
       [{ id: "accept", label: "Aceitar" }, { id: "reject", label: "Recusar" }],
     );
+
+    // `profiles.phone` e o `wa_contacts.phone` que o webhook real usa (a
+    // partir do número que a Z-API manda) podem estar em formatos diferentes
+    // (com/sem o 9º dígito) — gravar o pending_action direto em
+    // `partnerProfile.phone` pode criar uma linha que a mensagem real dela
+    // nunca vai encontrar (busca por igualdade exata, não por variantes).
+    // Por isso: se ela já tem uma linha wa_contacts (variante já usada de
+    // verdade pelo WhatsApp), grava NELA; só usa `partnerProfile.phone` como
+    // chave quando não existe nenhuma linha ainda.
+    const partnerPhoneVariants = phoneLookupVariants(partnerProfile.phone);
+    const { data: existingContact } = await supabaseAdmin
+      .from("wa_contacts").select("phone").in("phone", partnerPhoneVariants).maybeSingle();
+    const contactPhone = existingContact?.phone ?? partnerProfile.phone;
+
     await supabaseAdmin.from("wa_contacts").upsert(
       {
-        phone: partnerProfile.phone,
+        phone: contactPhone,
         name: partnerProfile.name ?? null,
         pending_action: {
           kind: "couple_invite_pending",
