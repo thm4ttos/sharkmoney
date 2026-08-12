@@ -3256,24 +3256,22 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
 
           // Data/hora futura vinda do texto tem prioridade sobre a da IA.
           const nat = parseFutureDateTimeSP(srcText);
-          // ⚠️ Bug real: nat.iso SEMPRE tem um valor (o parser assume "hoje"
-          // quando só a hora foi dita), então checar apenas "scheduledAt
-          // existe?" nunca detectava "só falta o dia" — "11:30 buscar
-          // escola" (hora presente, dia ausente) ou caía numa data
-          // adivinhada em silêncio, ou (quando a IA mandava algo malformado
-          // tipo "11:30" como scheduled_at) era rejeitado pelo
-          // recordAppointment com a mensagem genérica "preciso do que é e
-          // quando". O que realmente importa é hasDate/hasTime, não a mera
-          // presença de uma string — um scheduled_at da IA só conta como
-          // sinal de data/hora reais quando é uma data de verdade (parseável).
-          const aiScheduledAtValid = !!intent.scheduled_at && !isNaN(new Date(intent.scheduled_at as string).getTime());
-          const hasDate = nat.hasDate || aiScheduledAtValid;
-          const hasTime = nat.hasTime || aiScheduledAtValid;
-          const scheduledAt = (nat.hasDate && nat.hasTime)
-            ? nat.iso
-            : aiScheduledAtValid
-            ? intent.scheduled_at
-            : undefined;
+          // ⚠️ Bug real (2 rodadas): nat.iso SEMPRE tem um valor (o parser
+          // assume "hoje"/"amanhã" quando só a hora foi dita), então checar
+          // apenas "scheduledAt existe?" nunca detectava "só falta o dia".
+          // Uma primeira correção passou a confiar em intent.scheduled_at
+          // (da IA) como sinal de "data realmente informada" quando fosse
+          // parseável — mas a IA TAMBÉM chuta uma data padrão quando não sabe
+          // (confirmado ao vivo: "11:30 buscar escola" virou
+          // scheduled_at=amanhã 11:30 sem NUNCA perguntar o dia). Não há como
+          // distinguir "a IA entendeu uma data real" de "a IA também
+          // assumiu hoje/amanhã" só olhando o valor final — por segurança
+          // (Regra de Ouro: ambíguo nunca executa sozinho), hasDate/hasTime
+          // dependem SÓ do parser determinístico (nat), que é o único que
+          // sabe de verdade se a data veio do texto ou foi assumida.
+          const hasDate = nat.hasDate;
+          const hasTime = nat.hasTime;
+          const scheduledAt = (hasDate && hasTime) ? nat.iso : undefined;
           const scored = scoreAppointmentIntent({
             text: srcText,
             hasScheduledAt: Boolean(scheduledAt),

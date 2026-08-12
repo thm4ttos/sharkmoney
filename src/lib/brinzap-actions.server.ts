@@ -407,7 +407,11 @@ ${descLine}
 const ApptSchema = z.object({
   title: z.string().min(1).max(140),
   scheduled_at: z.string().min(1),
-  notes: z.string().max(500).optional(),
+  // .optional() só aceita `undefined` — todo call site passa `notes` via
+  // `?? null` (padrão usado em todo o app), então `null` explícito
+  // rejeitava QUALQUER compromisso sem local/observação, mesmo com título e
+  // data/hora perfeitos, com a mensagem genérica de "faltou informação".
+  notes: z.string().max(500).nullable().optional(),
 });
 
 export async function recordAppointment(
