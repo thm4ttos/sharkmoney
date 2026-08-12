@@ -3486,6 +3486,26 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
               }
             }
           }
+          // "Mudar o nome para: Prova Policia em Alegre" — mesma janela de
+          // "acabei de criar", mas pra NOME em vez de data. Só intercepta
+          // com vocabulário explícito de renomear (nome/título/chamar) pra
+          // não colidir com uma correção de descrição de uma transação
+          // qualquer que só por coincidência de horário caia na mesma janela.
+          if (!handledAsBillOrInstallment && !handledAsAppointment && /\b(nome|t[íi]tulo|chama(r)?|renome(ar)?)\b/i.test(inputText)) {
+            const newTitle = (intent.new_description || "").trim()
+              || (inputText.match(/(?:nome|t[íi]tulo)\s*(?:pra|para)?\s*[:\-]?\s*(.+)$/i)?.[1] ?? "").trim();
+            if (newTitle.length >= 2) {
+              const apptActions = await import("@/lib/appointment-actions.server");
+              const recentAppt = await apptActions.findRecentlyCreatedAppointment(profile.id);
+              if (recentAppt) {
+                await supabaseAdmin.from("appointments")
+                  .update({ title: newTitle.slice(0, 140), updated_at: new Date().toISOString() })
+                  .eq("id", recentAppt.id).eq("user_id", profile.id);
+                replyText = `✅ Nome atualizado!\n\n📝 ${newTitle}\n🕒 ${apptActions.prettyAppointmentDate(recentAppt.scheduled_at)}`;
+                handledAsAppointment = true;
+              }
+            }
+          }
           if (!handledAsBillOrInstallment && !handledAsAppointment) {
             const r = await actions.correctLastTransaction(profile.id, {
               correction_field: intent.correction_field, new_amount: intent.new_amount,
