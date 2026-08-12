@@ -10,7 +10,7 @@ import {
   Mail, Phone, Calendar, KeyRound, LogOut, Download, Bell, MessageCircle,
   Wallet, TrendingUp, TrendingDown, PiggyBank, ShieldCheck, Bot, BarChart3,
   Image as ImageIcon, Mic, Layers, Target, ListChecks, Hash, Activity,
-  Sparkles, Globe, Cpu, RefreshCw, Camera, ArrowUpRight,
+  Sparkles, Globe, Cpu, RefreshCw, Camera, ArrowUpRight, Heart,
 } from "lucide-react";
 import { resetUserHistory } from "@/lib/user-extras.functions";
 import { getMySubscription, getMySubscriptionHistory } from "@/lib/subscriptions.functions";
@@ -474,6 +474,17 @@ function Page() {
         </div>
       </Card>
 
+      {/* ===== MODO CASAL ===== */}
+      <Card title="Modo Casal" icon={Heart} delay={0.35}>
+        <p className="text-sm text-muted-foreground">
+          Vincule sua conta com a do seu parceiro(a) e compartilhem gastos, contas, parcelamentos e metas escolhidos a dedo — o resto continua totalmente privado.
+        </p>
+        <Link to="/app/casal"
+          className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground px-4 py-2.5 text-sm glow-neon hover:scale-[1.02] transition-smooth">
+          <Heart className="h-4 w-4" /> Abrir Modo Casal
+        </Link>
+      </Card>
+
       {/* ===== DATA EXPORT ===== */}
       <Card title="Meus dados" icon={Download} delay={0.36}>
         <div className="grid sm:grid-cols-2 gap-3">
@@ -483,7 +494,7 @@ function Page() {
           </button>
         </div>
         <p className="text-[11px] text-muted-foreground mt-3">
-          Para zerar seu histórico financeiro, acesse a aba <Link to="/app/transacoes" className="text-primary hover:underline">Transações</Link>.
+          Para zerar seu histórico financeiro, acesse a aba <Link to="/app/transacoes" search={{ kind: undefined }} className="text-primary hover:underline">Transações</Link>.
         </p>
       </Card>
 

@@ -13,7 +13,7 @@ import { DesktopSidebar } from "@/components/brinzap/DesktopSidebar";
 import {
   LayoutDashboard, Home, Zap, ArrowLeftRight, FolderTree, PiggyBank,
   CreditCard, AlertTriangle, Sparkles, Bell, FileBarChart2, Wallet,
-  LifeBuoy, User as UserIcon, LogOut, MessageCircle, Menu, X, CalendarDays, Target, Repeat, Upload, Handshake, type LucideIcon
+  LifeBuoy, User as UserIcon, LogOut, MessageCircle, Menu, X, CalendarDays, Target, Repeat, Upload, Handshake, Heart, type LucideIcon
 } from "lucide-react";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; exact?: boolean };
@@ -23,6 +23,7 @@ const nav: NavItem[] = [
   { to: "/app/dashboard", label: "Central Financeira", icon: LayoutDashboard },
   { to: "/app/calendario", label: "Calendário", icon: CalendarDays },
   { to: "/app/metas", label: "Metas", icon: Target },
+  { to: "/app/casal", label: "Casal", icon: Heart },
   { to: "/app/contas-fixas", label: "Contas Fixas", icon: Repeat },
   { to: "/app/lancar", label: "Lançar Rápido", icon: Zap },
   { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },

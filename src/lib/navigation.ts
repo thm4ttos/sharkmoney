@@ -2,7 +2,7 @@ import {
   Home, User as UserIcon, ArrowLeftRight, Bell, Sparkles, Zap,
   Wallet, CalendarDays, Repeat, CreditCard, PiggyBank, FolderTree,
   AlertTriangle, Target, Crown, FileBarChart2, Upload, MessageCircle,
-  Settings, LifeBuoy, ShieldCheck,
+  Settings, LifeBuoy, ShieldCheck, Heart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,6 +36,7 @@ export const navigationSections: NavSection[] = [
       { to: "/app/categorias", label: "Categorias", icon: FolderTree },
       { to: "/app/dividas", label: "Dívidas", icon: AlertTriangle },
       { to: "/app/metas", label: "Metas", icon: Target },
+      { to: "/app/casal", label: "Casal", icon: Heart },
       { to: "/app/liberdade", label: "Liberdade Financeira", icon: Crown },
       { to: "/app/salario", label: "Salário", icon: Wallet },
     ],

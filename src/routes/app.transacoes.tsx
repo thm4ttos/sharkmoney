@@ -5,8 +5,9 @@ import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tansta
 import { formatBRL, groupOf, categoryGroups } from "@/lib/user-mock";
 import { listTransactions, deleteTransaction, updateTransaction } from "@/lib/brinzap.functions";
 import { resetUserHistory } from "@/lib/user-extras.functions";
+import { getCoupleStatus, setItemVisibility } from "@/lib/couple.functions";
 import { formatDateSP, toDateInputSP, dateInputSPToIso } from "@/lib/datetime";
-import { Search, MessageCircle, Loader2, Pencil, Trash2, X, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react";
+import { Search, MessageCircle, Loader2, Pencil, Trash2, X, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ShieldCheck, Heart } from "lucide-react";
 import { AuditDetails } from "@/components/brinzap/transactions/AuditDetails";
 
 
@@ -40,6 +41,8 @@ function TxPage() {
   const removeFn = useServerFn(deleteTransaction);
   const updateFn = useServerFn(updateTransaction);
   const resetFn = useServerFn(resetUserHistory);
+  const coupleStatusFn = useServerFn(getCoupleStatus);
+  const shareFn = useServerFn(setItemVisibility);
 
   // Debounce search input
   useEffect(() => {
@@ -102,6 +105,14 @@ function TxPage() {
   const updateMut = useMutation({
     mutationFn: (payload: any) => updateFn({ data: payload }) as any,
     onSuccess: () => { setEditing(null); invalidate(); },
+  });
+
+  const { data: coupleStatus } = useQuery({ queryKey: ["couple-status"], queryFn: () => coupleStatusFn() as any });
+  const hasCouplePartner = coupleStatus?.link?.status === "accepted";
+  const shareMut = useMutation({
+    mutationFn: (v: { id: string; visibility: "personal" | "shared" }) =>
+      shareFn({ data: { table: "transactions", id: v.id, visibility: v.visibility } }) as any,
+    onSuccess: invalidate,
   });
 
   const resetMut = useMutation({
@@ -208,6 +219,14 @@ function TxPage() {
                     {isIncome ? "+" : "-"} {formatBRL(Number(t.amount ?? 0))}
                   </div>
                   <div className="md:col-span-2 flex md:justify-end gap-1.5">
+                    {hasCouplePartner && (
+                      <button
+                        onClick={() => shareMut.mutate({ id: t.id, visibility: t.visibility === "shared" ? "personal" : "shared" })}
+                        title={t.visibility === "shared" ? "Compartilhado — clique pra tornar privado" : "Compartilhar com o parceiro(a)"}
+                        className={`h-8 w-8 grid place-items-center rounded-lg border transition-smooth ${t.visibility === "shared" ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-background/40 hover:border-primary/50 hover:text-primary"}`}>
+                        <Heart className="h-3.5 w-3.5" fill={t.visibility === "shared" ? "currentColor" : "none"} />
+                      </button>
+                    )}
                     <button onClick={() => setEditing(t)} title="Editar"
                       className="h-8 w-8 grid place-items-center rounded-lg border border-border bg-background/40 hover:border-primary/50 hover:text-primary transition-smooth">
                       <Pencil className="h-3.5 w-3.5" />
@@ -236,6 +255,14 @@ function TxPage() {
                       {isIncome ? "+" : "-"} {formatBRL(Number(t.amount ?? 0))}
                     </span>
                     <div className="flex gap-1">
+                      {hasCouplePartner && (
+                        <button
+                          onClick={() => shareMut.mutate({ id: t.id, visibility: t.visibility === "shared" ? "personal" : "shared" })}
+                          aria-label="Compartilhar com o parceiro(a)"
+                          className={`h-7 w-7 grid place-items-center rounded-md border active:scale-95 transition-smooth ${t.visibility === "shared" ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-background/40"}`}>
+                          <Heart className="h-3 w-3" fill={t.visibility === "shared" ? "currentColor" : "none"} />
+                        </button>
+                      )}
                       <button onClick={() => setAuditId(t.id)} aria-label="Ver auditoria"
                         className="h-7 w-7 grid place-items-center rounded-md border border-border bg-background/40 active:scale-95 transition-smooth"
                         title="Ver auditoria / origem">

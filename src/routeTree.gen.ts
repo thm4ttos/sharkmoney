@@ -39,6 +39,7 @@ import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
 import { Route as AppContasFixasRouteImport } from './routes/app.contas-fixas'
 import { Route as AppCompromissosRouteImport } from './routes/app.compromissos'
 import { Route as AppCategoriasRouteImport } from './routes/app.categorias'
+import { Route as AppCasalRouteImport } from './routes/app.casal'
 import { Route as AppCalendarioRouteImport } from './routes/app.calendario'
 import { Route as AppAuditoriaRouteImport } from './routes/app.auditoria'
 import { Route as AppAfiliadosRouteImport } from './routes/app.afiliados'
@@ -58,10 +59,12 @@ import { Route as AdminAuthDebugRouteImport } from './routes/admin.auth-debug'
 import { Route as AdminAfiliadosRouteImport } from './routes/admin.afiliados'
 import { Route as ApiPublicZapiSetupRouteImport } from './routes/api/public/zapi-setup'
 import { Route as ApiPublicWhatsappRouteImport } from './routes/api/public/whatsapp'
+import { Route as ApiPublicRRouteImport } from './routes/api/public/r'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin.users.$userId'
 import { Route as ApiPublicHooksWeeklySummaryRouteImport } from './routes/api/public/hooks/weekly-summary'
 import { Route as ApiPublicHooksWaReprocessRouteImport } from './routes/api/public/hooks/wa-reprocess'
 import { Route as ApiPublicHooksWaProcessRouteImport } from './routes/api/public/hooks/wa-process'
+import { Route as ApiPublicHooksWaBroadcastProcessRouteImport } from './routes/api/public/hooks/wa-broadcast-process'
 import { Route as ApiPublicHooksReengagementRouteImport } from './routes/api/public/hooks/reengagement'
 import { Route as ApiPublicHooksInstallmentRemindersRouteImport } from './routes/api/public/hooks/installment-reminders'
 import { Route as ApiPublicHooksBillRemindersRouteImport } from './routes/api/public/hooks/bill-reminders'
@@ -219,6 +222,11 @@ const AppCategoriasRoute = AppCategoriasRouteImport.update({
   path: '/categorias',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCasalRoute = AppCasalRouteImport.update({
+  id: '/casal',
+  path: '/casal',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCalendarioRoute = AppCalendarioRouteImport.update({
   id: '/calendario',
   path: '/calendario',
@@ -314,6 +322,11 @@ const ApiPublicWhatsappRoute = ApiPublicWhatsappRouteImport.update({
   path: '/api/public/whatsapp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicRRoute = ApiPublicRRouteImport.update({
+  id: '/api/public/r',
+  path: '/api/public/r',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
   id: '/$userId',
   path: '/$userId',
@@ -336,6 +349,12 @@ const ApiPublicHooksWaProcessRoute = ApiPublicHooksWaProcessRouteImport.update({
   path: '/api/public/hooks/wa-process',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksWaBroadcastProcessRoute =
+  ApiPublicHooksWaBroadcastProcessRouteImport.update({
+    id: '/api/public/hooks/wa-broadcast-process',
+    path: '/api/public/hooks/wa-broadcast-process',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksReengagementRoute =
   ApiPublicHooksReengagementRouteImport.update({
     id: '/api/public/hooks/reengagement',
@@ -398,6 +417,7 @@ export interface FileRoutesByFullPath {
   '/app/afiliados': typeof AppAfiliadosRoute
   '/app/auditoria': typeof AppAuditoriaRoute
   '/app/calendario': typeof AppCalendarioRoute
+  '/app/casal': typeof AppCasalRoute
   '/app/categorias': typeof AppCategoriasRoute
   '/app/compromissos': typeof AppCompromissosRoute
   '/app/contas-fixas': typeof AppContasFixasRoute
@@ -421,6 +441,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/api/public/r': typeof ApiPublicRRoute
   '/api/public/whatsapp': typeof ApiPublicWhatsappRoute
   '/api/public/zapi-setup': typeof ApiPublicZapiSetupRoute
   '/api/public/affiliate/track': typeof ApiPublicAffiliateTrackRoute
@@ -429,6 +450,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/bill-reminders': typeof ApiPublicHooksBillRemindersRoute
   '/api/public/hooks/installment-reminders': typeof ApiPublicHooksInstallmentRemindersRoute
   '/api/public/hooks/reengagement': typeof ApiPublicHooksReengagementRoute
+  '/api/public/hooks/wa-broadcast-process': typeof ApiPublicHooksWaBroadcastProcessRoute
   '/api/public/hooks/wa-process': typeof ApiPublicHooksWaProcessRoute
   '/api/public/hooks/wa-reprocess': typeof ApiPublicHooksWaReprocessRoute
   '/api/public/hooks/weekly-summary': typeof ApiPublicHooksWeeklySummaryRoute
@@ -457,6 +479,7 @@ export interface FileRoutesByTo {
   '/app/afiliados': typeof AppAfiliadosRoute
   '/app/auditoria': typeof AppAuditoriaRoute
   '/app/calendario': typeof AppCalendarioRoute
+  '/app/casal': typeof AppCasalRoute
   '/app/categorias': typeof AppCategoriasRoute
   '/app/compromissos': typeof AppCompromissosRoute
   '/app/contas-fixas': typeof AppContasFixasRoute
@@ -480,6 +503,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/app': typeof AppIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/api/public/r': typeof ApiPublicRRoute
   '/api/public/whatsapp': typeof ApiPublicWhatsappRoute
   '/api/public/zapi-setup': typeof ApiPublicZapiSetupRoute
   '/api/public/affiliate/track': typeof ApiPublicAffiliateTrackRoute
@@ -488,6 +512,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/bill-reminders': typeof ApiPublicHooksBillRemindersRoute
   '/api/public/hooks/installment-reminders': typeof ApiPublicHooksInstallmentRemindersRoute
   '/api/public/hooks/reengagement': typeof ApiPublicHooksReengagementRoute
+  '/api/public/hooks/wa-broadcast-process': typeof ApiPublicHooksWaBroadcastProcessRoute
   '/api/public/hooks/wa-process': typeof ApiPublicHooksWaProcessRoute
   '/api/public/hooks/wa-reprocess': typeof ApiPublicHooksWaReprocessRoute
   '/api/public/hooks/weekly-summary': typeof ApiPublicHooksWeeklySummaryRoute
@@ -519,6 +544,7 @@ export interface FileRoutesById {
   '/app/afiliados': typeof AppAfiliadosRoute
   '/app/auditoria': typeof AppAuditoriaRoute
   '/app/calendario': typeof AppCalendarioRoute
+  '/app/casal': typeof AppCasalRoute
   '/app/categorias': typeof AppCategoriasRoute
   '/app/compromissos': typeof AppCompromissosRoute
   '/app/contas-fixas': typeof AppContasFixasRoute
@@ -542,6 +568,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/api/public/r': typeof ApiPublicRRoute
   '/api/public/whatsapp': typeof ApiPublicWhatsappRoute
   '/api/public/zapi-setup': typeof ApiPublicZapiSetupRoute
   '/api/public/affiliate/track': typeof ApiPublicAffiliateTrackRoute
@@ -550,6 +577,7 @@ export interface FileRoutesById {
   '/api/public/hooks/bill-reminders': typeof ApiPublicHooksBillRemindersRoute
   '/api/public/hooks/installment-reminders': typeof ApiPublicHooksInstallmentRemindersRoute
   '/api/public/hooks/reengagement': typeof ApiPublicHooksReengagementRoute
+  '/api/public/hooks/wa-broadcast-process': typeof ApiPublicHooksWaBroadcastProcessRoute
   '/api/public/hooks/wa-process': typeof ApiPublicHooksWaProcessRoute
   '/api/public/hooks/wa-reprocess': typeof ApiPublicHooksWaReprocessRoute
   '/api/public/hooks/weekly-summary': typeof ApiPublicHooksWeeklySummaryRoute
@@ -582,6 +610,7 @@ export interface FileRouteTypes {
     | '/app/afiliados'
     | '/app/auditoria'
     | '/app/calendario'
+    | '/app/casal'
     | '/app/categorias'
     | '/app/compromissos'
     | '/app/contas-fixas'
@@ -605,6 +634,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/app/'
     | '/admin/users/$userId'
+    | '/api/public/r'
     | '/api/public/whatsapp'
     | '/api/public/zapi-setup'
     | '/api/public/affiliate/track'
@@ -613,6 +643,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/bill-reminders'
     | '/api/public/hooks/installment-reminders'
     | '/api/public/hooks/reengagement'
+    | '/api/public/hooks/wa-broadcast-process'
     | '/api/public/hooks/wa-process'
     | '/api/public/hooks/wa-reprocess'
     | '/api/public/hooks/weekly-summary'
@@ -641,6 +672,7 @@ export interface FileRouteTypes {
     | '/app/afiliados'
     | '/app/auditoria'
     | '/app/calendario'
+    | '/app/casal'
     | '/app/categorias'
     | '/app/compromissos'
     | '/app/contas-fixas'
@@ -664,6 +696,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/app'
     | '/admin/users/$userId'
+    | '/api/public/r'
     | '/api/public/whatsapp'
     | '/api/public/zapi-setup'
     | '/api/public/affiliate/track'
@@ -672,6 +705,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/bill-reminders'
     | '/api/public/hooks/installment-reminders'
     | '/api/public/hooks/reengagement'
+    | '/api/public/hooks/wa-broadcast-process'
     | '/api/public/hooks/wa-process'
     | '/api/public/hooks/wa-reprocess'
     | '/api/public/hooks/weekly-summary'
@@ -702,6 +736,7 @@ export interface FileRouteTypes {
     | '/app/afiliados'
     | '/app/auditoria'
     | '/app/calendario'
+    | '/app/casal'
     | '/app/categorias'
     | '/app/compromissos'
     | '/app/contas-fixas'
@@ -725,6 +760,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/app/'
     | '/admin/users/$userId'
+    | '/api/public/r'
     | '/api/public/whatsapp'
     | '/api/public/zapi-setup'
     | '/api/public/affiliate/track'
@@ -733,6 +769,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/bill-reminders'
     | '/api/public/hooks/installment-reminders'
     | '/api/public/hooks/reengagement'
+    | '/api/public/hooks/wa-broadcast-process'
     | '/api/public/hooks/wa-process'
     | '/api/public/hooks/wa-reprocess'
     | '/api/public/hooks/weekly-summary'
@@ -747,6 +784,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiPublicRRoute: typeof ApiPublicRRoute
   ApiPublicWhatsappRoute: typeof ApiPublicWhatsappRoute
   ApiPublicZapiSetupRoute: typeof ApiPublicZapiSetupRoute
   ApiPublicAffiliateTrackRoute: typeof ApiPublicAffiliateTrackRoute
@@ -755,6 +793,7 @@ export interface RootRouteChildren {
   ApiPublicHooksBillRemindersRoute: typeof ApiPublicHooksBillRemindersRoute
   ApiPublicHooksInstallmentRemindersRoute: typeof ApiPublicHooksInstallmentRemindersRoute
   ApiPublicHooksReengagementRoute: typeof ApiPublicHooksReengagementRoute
+  ApiPublicHooksWaBroadcastProcessRoute: typeof ApiPublicHooksWaBroadcastProcessRoute
   ApiPublicHooksWaProcessRoute: typeof ApiPublicHooksWaProcessRoute
   ApiPublicHooksWaReprocessRoute: typeof ApiPublicHooksWaReprocessRoute
   ApiPublicHooksWeeklySummaryRoute: typeof ApiPublicHooksWeeklySummaryRoute
@@ -972,6 +1011,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCategoriasRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/casal': {
+      id: '/app/casal'
+      path: '/casal'
+      fullPath: '/app/casal'
+      preLoaderRoute: typeof AppCasalRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/calendario': {
       id: '/app/calendario'
       path: '/calendario'
@@ -1105,6 +1151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWhatsappRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/r': {
+      id: '/api/public/r'
+      path: '/api/public/r'
+      fullPath: '/api/public/r'
+      preLoaderRoute: typeof ApiPublicRRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/users/$userId': {
       id: '/admin/users/$userId'
       path: '/$userId'
@@ -1131,6 +1184,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/wa-process'
       fullPath: '/api/public/hooks/wa-process'
       preLoaderRoute: typeof ApiPublicHooksWaProcessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/wa-broadcast-process': {
+      id: '/api/public/hooks/wa-broadcast-process'
+      path: '/api/public/hooks/wa-broadcast-process'
+      fullPath: '/api/public/hooks/wa-broadcast-process'
+      preLoaderRoute: typeof ApiPublicHooksWaBroadcastProcessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/reengagement': {
@@ -1232,6 +1292,7 @@ interface AppRouteChildren {
   AppAfiliadosRoute: typeof AppAfiliadosRoute
   AppAuditoriaRoute: typeof AppAuditoriaRoute
   AppCalendarioRoute: typeof AppCalendarioRoute
+  AppCasalRoute: typeof AppCasalRoute
   AppCategoriasRoute: typeof AppCategoriasRoute
   AppCompromissosRoute: typeof AppCompromissosRoute
   AppContasFixasRoute: typeof AppContasFixasRoute
@@ -1259,6 +1320,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAfiliadosRoute: AppAfiliadosRoute,
   AppAuditoriaRoute: AppAuditoriaRoute,
   AppCalendarioRoute: AppCalendarioRoute,
+  AppCasalRoute: AppCasalRoute,
   AppCategoriasRoute: AppCategoriasRoute,
   AppCompromissosRoute: AppCompromissosRoute,
   AppContasFixasRoute: AppContasFixasRoute,
@@ -1293,6 +1355,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiPublicRRoute: ApiPublicRRoute,
   ApiPublicWhatsappRoute: ApiPublicWhatsappRoute,
   ApiPublicZapiSetupRoute: ApiPublicZapiSetupRoute,
   ApiPublicAffiliateTrackRoute: ApiPublicAffiliateTrackRoute,
@@ -1303,6 +1366,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksInstallmentRemindersRoute:
     ApiPublicHooksInstallmentRemindersRoute,
   ApiPublicHooksReengagementRoute: ApiPublicHooksReengagementRoute,
+  ApiPublicHooksWaBroadcastProcessRoute: ApiPublicHooksWaBroadcastProcessRoute,
   ApiPublicHooksWaProcessRoute: ApiPublicHooksWaProcessRoute,
   ApiPublicHooksWaReprocessRoute: ApiPublicHooksWaReprocessRoute,
   ApiPublicHooksWeeklySummaryRoute: ApiPublicHooksWeeklySummaryRoute,
@@ -1310,3 +1374,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

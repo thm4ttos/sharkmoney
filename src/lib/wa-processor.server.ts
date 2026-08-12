@@ -293,6 +293,13 @@ export function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; a
   // Pergunta / consulta explícita
   const isQuery = /(qua(l|is)|quanto|quantos|quantas|meu(s)?|minha(s)?|tenho|liste?|mostre?|exiba|ver|veja|listar|mostrar|exibir|total|resumo|cadastrad[ao]s?|vencem?|vence|pago|pende|atras|status|quais\ssao|como\s+foi|como\s+esta(v|)a|fechament|balan(c|ç)o|movimenta|financeiramente|situa(c|ç)(a|ã)o)/i.test(t);
 
+  // ----- Modo Casal: "quanto gastamos", "nosso gasto", "saldo do casal" -----
+  // Checado ANTES de tudo (linguagem no plural/"casal" é um sinal forte e
+  // inequívoco) pra não cair no relatório pessoal genérico mais abaixo.
+  if (/\bgastamos\b|\bn[óo]s\s+gast\w*|\bnosso(s)?\s+gasto|\b(gasto|saldo|resumo)\s+(do|de)\s+casal\b|\bmodo\s+casal\b/i.test(t)) {
+    return { kind: "query_couple_summary" };
+  }
+
   // ----- Compromissos / Agenda -----
   // Só roteia para CONSULTA quando é claramente uma pergunta e não há indicadores
   // de criação (horário, "tenho", "marcar", "agendar", dia específico). Caso contrário,
@@ -1168,6 +1175,47 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         return { ok: true, status: "processed", intent: "weekly_optout_keep" };
       }
       // Qualquer outra resposta: limpa o pending e segue fluxo normal (a mensagem é interpretada como novo comando).
+      await supabaseAdmin.from("wa_contacts").update({ pending_action: null }).eq("phone", phone);
+    }
+
+    // ===== couple_invite_pending (aceite/recusa de convite do Modo Casal) =====
+    if (pending && pending.kind === "couple_invite_pending" && !imageUrl) {
+      const { sendWhatsAppText } = await import("@/lib/uazapi.server");
+      const normLower = normalized.toLowerCase().trim();
+      const wantsAccept = YES_RE.test(normLower);
+      const wantsReject = NO_RE.test(normLower);
+      if (wantsAccept || wantsReject) {
+        const nextStatus = wantsAccept ? "accepted" : "rejected";
+        const { data: updatedLink } = await supabaseAdmin
+          .from("couple_links" as any)
+          .update({ status: nextStatus, responded_at: new Date().toISOString() })
+          .eq("id", pending.link_id).eq("status", "pending")
+          .select().maybeSingle();
+        await supabaseAdmin.from("wa_contacts").update({ pending_action: null }).eq("phone", phone);
+
+        let replyText: string;
+        if (!updatedLink) {
+          replyText = "Esse convite não está mais disponível (talvez já tenha sido respondido ou cancelado).";
+        } else if (wantsAccept) {
+          replyText = `💙 Prontinho! Você e *${pending.requester_name || "seu parceiro(a)"}* agora estão no *Modo Casal*. Vocês podem compartilhar gastos, contas, parcelamentos e metas escolhidos a dedo pelo site — o resto continua totalmente privado.`;
+          const { data: requesterProfile } = await supabaseAdmin.from("profiles").select("phone").eq("id", pending.requester_id).maybeSingle();
+          if (requesterProfile?.phone) {
+            await sendWhatsAppText(requesterProfile.phone, `🎉 *${profile?.name?.split(" ")[0] || "Seu parceiro(a)"}* aceitou seu convite! Agora vocês já podem compartilhar gastos no Modo Casal.`);
+          }
+        } else {
+          replyText = "Tudo bem, convite recusado. Se mudar de ideia, é só pedir pra pessoa te convidar de novo. 👍";
+        }
+        const sendResult = await sendWhatsAppText(replyPhone, replyText);
+        await supabaseAdmin.from("whatsapp_messages").update({
+          ai_intent: wantsAccept ? "couple_invite_accept" : "couple_invite_reject", status: sendResult.ok ? "processed" : "send_error",
+        }).eq("id", row.id);
+        await supabaseAdmin.from("whatsapp_messages").insert({
+          user_id: profile.id, phone: replyPhone, direction: "out", media_type: "text",
+          content: replyText, status: sendResult.ok ? "sent" : "send_error", raw: { send: sendResult } as any,
+        });
+        return { ok: true, status: "processed", intent: wantsAccept ? "couple_invite_accept" : "couple_invite_reject" };
+      }
+      // Qualquer outra resposta: limpa o pending e segue fluxo normal (não força uma decisão).
       await supabaseAdmin.from("wa_contacts").update({ pending_action: null }).eq("phone", phone);
     }
 
@@ -2989,7 +3037,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         "query_balance","query_summary","query_finance_report","query_appointments",
         "query_bills","query_installments","query_debts","query_goals","query_habits",
         "query_transactions","query_profile","update_profile","query_help","open_dashboard",
-        "create_credit_card","query_credit_card",
+        "create_credit_card","query_credit_card","query_couple_summary",
         "confirm_yes","confirm_no","financial_validation_error",
       ]);
       if (intent && !imageUrl && !REGISTRABLE.has(intent.kind)) {
@@ -3401,6 +3449,28 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
 
 
         // Saldo padrão = MÊS ATUAL. Histórico/total apenas se pedido explicitamente.
+        case "query_couple_summary": {
+          const { computeCoupleBalanceCore } = await import("@/lib/couple.functions");
+          const balRaw = await computeCoupleBalanceCore(supabaseAdmin, profile.id);
+          if (!balRaw.link) {
+            replyText = "Você ainda não tem um parceiro(a) vinculado(a) no *Modo Casal*. Convide pelo site (aba Casal) pra começar a compartilhar gastos. 💙";
+            break;
+          }
+          const bal = balRaw as any;
+          const { data: partnerProfile } = await supabaseAdmin.from("profiles").select("name").eq("id", bal.partnerId).maybeSingle();
+          const partnerName = (partnerProfile?.name || "seu parceiro(a)").split(" ")[0];
+          const meIsRequester = bal.requesterId === profile.id;
+          const myPaid = meIsRequester ? bal.requesterPaid : bal.partnerPaid;
+          const theirPaid = meIsRequester ? bal.partnerPaid : bal.requesterPaid;
+          const myDelta = meIsRequester ? bal.requesterDelta : -bal.requesterDelta;
+          const balanceLine = Math.abs(myDelta) < 0.01
+            ? "✅ Está tudo em dia entre vocês."
+            : myDelta > 0
+            ? `👉 *${partnerName}* te deve ${formatBRL(myDelta)}.`
+            : `👈 Você deve ${formatBRL(Math.abs(myDelta))} pra *${partnerName}*.`;
+          replyText = `❤️ *Modo Casal — gastos compartilhados este mês*\n\n💸 Total: ${formatBRL(bal.total)}\nVocê pagou: ${formatBRL(myPaid)}\n${partnerName} pagou: ${formatBRL(theirPaid)}\n\n${balanceLine}`;
+          break;
+        }
         case "query_balance": replyText = (await actions.queryBalance(profile.id, inputText || imageCaption || "")).replyText; break;
         case "query_summary": {
           const categoryHint = (intent as any).category_hint;
