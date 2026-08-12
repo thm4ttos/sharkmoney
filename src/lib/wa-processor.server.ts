@@ -1299,6 +1299,21 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           else if (choice === "confirm" && pending.partial_iso && pending.has_date && pending.has_time) {
             finalIso = pending.partial_iso;
           }
+          // Bug real: quando só falta a HORA e o usuário diz explicitamente
+          // que não sabe/não tem hora definida ("não sei a hora, marca pro
+          // dia"), o Abio insistia perguntando de novo em vez de agendar —
+          // o usuário já respondeu, só que a resposta era "sem horário
+          // específico", não uma hora. Usa 09:00 como padrão (mesma hora
+          // default já usada em appointment-datetime.server.ts quando
+          // hasTime é falso) e cria mesmo assim.
+          const declinesTime = /\bn[ãa]o\s+(sei|tenho|sabe)\s+(a\s+)?hor[ae]|sem\s+hor[ae]\s+(definida|certa|marcada|espec[íi]fica)?\b|hor[áa]rio\s+indefinid|qualquer\s+hor[áa]rio|marca(r)?\s+(assim\s+mesmo|sem\s+hora)|(o\s+)?dia\s+(todo|inteiro)\b/i;
+          if (!finalIso && pending.has_date && !pending.has_time && pending.partial_iso && declinesTime.test(inputText)) {
+            const base = new Date(pending.partial_iso);
+            if (!isNaN(base.getTime())) {
+              base.setUTCHours(12, 0, 0, 0); // 09:00 em America/Sao_Paulo (UTC-3)
+              finalIso = base.toISOString();
+            }
+          }
 
           // Memória: mantém o título já informado, mas aproveita uma
           // descrição nova se a resposta trouxer uma (ex.: "Buscar aluna,
