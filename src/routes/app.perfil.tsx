@@ -89,6 +89,7 @@ function Page() {
   const [gender, setGender] = useState("");
   const [notifyWa, setNotifyWa] = useState(true);
   const [notifyEmail, setNotifyEmail] = useState(true);
+  const [notifyWeekly, setNotifyWeekly] = useState(true);
   const [saved, setSaved] = useState<string | null>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
 
@@ -100,6 +101,9 @@ function Page() {
       setGender(profile.gender ?? "");
       setNotifyWa(!!profile.notify_whatsapp);
       setNotifyEmail(!!profile.notify_email);
+      // Padrão é ligado — mesma regra usada no envio (weekly-summary.ts:
+      // "p.weekly_summary_enabled !== false"), null/undefined conta como true.
+      setNotifyWeekly((profile as any).weekly_summary_enabled !== false);
     }
   }, [profile]);
 
@@ -162,10 +166,15 @@ function Page() {
     }
   };
 
-  const onToggleNotify = async (kind: "wa" | "email", v: boolean) => {
-    if (kind === "wa") setNotifyWa(v); else setNotifyEmail(v);
+  const onToggleNotify = async (kind: "wa" | "email" | "weekly", v: boolean) => {
+    if (kind === "wa") setNotifyWa(v);
+    else if (kind === "email") setNotifyEmail(v);
+    else setNotifyWeekly(v);
     try {
-      await updateFn({ data: kind === "wa" ? { notify_whatsapp: v } : { notify_email: v } });
+      const patch = kind === "wa" ? { notify_whatsapp: v }
+        : kind === "email" ? { notify_email: v }
+        : { weekly_summary_enabled: v };
+      await updateFn({ data: patch });
       qc.invalidateQueries({ queryKey: ["profile-overview"] });
     } catch { /* ignore */ }
   };
@@ -455,6 +464,12 @@ function Page() {
             description="Resumo mensal, recibos e avisos da conta."
             checked={notifyEmail}
             onChange={(v) => onToggleNotify("email", v)}
+          />
+          <ToggleRow
+            label="Resumo semanal"
+            description="Enviado aos domingos às 21:00, pelo WhatsApp."
+            checked={notifyWeekly}
+            onChange={(v) => onToggleNotify("weekly", v)}
           />
         </div>
       </Card>

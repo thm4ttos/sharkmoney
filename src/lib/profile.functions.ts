@@ -15,7 +15,7 @@ export const getProfileOverview = createServerFn({ method: "GET" })
     const { data: profile, error: pErr } = await supabase
       .from("profiles")
       .select(
-        "id, name, phone, email, plan, status, created_at, updated_at, trial_ends_at, notify_whatsapp, notify_email, last_seen_at, avatar_url, gender",
+        "id, name, phone, email, plan, status, created_at, updated_at, trial_ends_at, notify_whatsapp, notify_email, weekly_summary_enabled, last_seen_at, avatar_url, gender",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -150,6 +150,7 @@ export const updateMyProfile = createServerFn({ method: "POST" })
         phone: z.string().trim().min(8).max(20).optional(),
         notify_whatsapp: z.boolean().optional(),
         notify_email: z.boolean().optional(),
+        weekly_summary_enabled: z.boolean().optional(),
         gender: z.enum(["male", "female", "other"]).nullable().optional(),
         // data URI (imagem recortada) ou null para remover
         avatar_url: z.string().max(3_000_000).nullable().optional(),
@@ -164,6 +165,7 @@ export const updateMyProfile = createServerFn({ method: "POST" })
     if (data.phone !== undefined) patch.phone = normalizePhone(data.phone);
     if (data.notify_whatsapp !== undefined) patch.notify_whatsapp = data.notify_whatsapp;
     if (data.notify_email !== undefined) patch.notify_email = data.notify_email;
+    if (data.weekly_summary_enabled !== undefined) patch.weekly_summary_enabled = data.weekly_summary_enabled;
     if (data.gender !== undefined) patch.gender = data.gender;
     if (data.avatar_url !== undefined) {
       if (data.avatar_url && !/^data:image\/(png|jpe?g|webp);base64,/.test(data.avatar_url)) {

@@ -1,7 +1,7 @@
-// Fechamento semanal automático via WhatsApp (domingo 19h SP).
+// Fechamento semanal automático via WhatsApp (domingo 21h SP).
 //
 // Ações:
-//  • action=ask (padrão, cron domingo 19h SP): envia AUTOMATICAMENTE o
+//  • action=ask (padrão, cron domingo 21h SP): envia AUTOMATICAMENTE o
 //    resumo da semana para cada usuário elegível. Duas trilhas:
 //      - Teve movimentações: intro aleatória (7) + resumo detalhado
 //        + convite para o painel.
@@ -13,6 +13,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { sendWhatsAppText } from "@/lib/uazapi.server";
+import { installmentDueDate } from "@/lib/installments-dates";
 
 const ok = (b: unknown = { ok: true }) =>
   new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -224,6 +225,43 @@ export async function sendReport(userId: string, type: "weekly" | "monthly") {
   return { ok: true as const, status: 200, type };
 }
 
+// Soma de contas fixas + parcelas com vencimento nos próximos 7 dias — só
+// PREVISÃO (nunca conta como despesa já realizada, nunca mexe em saldo).
+// Contas fixas: usa o saldo restante do ciclo (original - já pago), igual
+// à lógica já usada em bill-reminders.ts. Parcelas: usa installmentDueDate
+// pra achar a data real da PRÓXIMA parcela não paga (não a 1ª parcela).
+async function upcomingWeekObligationsTotal(userId: string, now: Date): Promise<number> {
+  const inOneWeek = new Date(now); inOneWeek.setDate(inOneWeek.getDate() + 7);
+  const nowYmd = ymd(now), endYmd = ymd(inOneWeek);
+
+  const [billsR, instR] = await Promise.all([
+    supabaseAdmin.from("recurring_bills")
+      .select("amount, original_amount, paid_amount, next_due_at")
+      .eq("user_id", userId).eq("active", true)
+      .gte("next_due_at", nowYmd).lte("next_due_at", endYmd),
+    supabaseAdmin.from("installment_purchases")
+      .select("total_amount, installments_total, installments_paid, first_due_at")
+      .eq("user_id", userId).eq("active", true),
+  ]);
+
+  let total = 0;
+  for (const b of (billsR.data ?? []) as any[]) {
+    const original = Number(b.original_amount ?? b.amount ?? 0);
+    const paid = Number(b.paid_amount ?? 0);
+    total += Math.max(0, original - paid);
+  }
+  for (const p of (instR.data ?? []) as any[]) {
+    const totalN = Number(p.installments_total ?? 0);
+    const paidN = Number(p.installments_paid ?? 0);
+    if (paidN >= totalN || !p.first_due_at) continue;
+    const dueAt = installmentDueDate(String(p.first_due_at), paidN + 1);
+    if (dueAt >= nowYmd && dueAt <= endYmd) {
+      total += Number(p.total_amount ?? 0) / Math.max(1, totalN);
+    }
+  }
+  return Math.round(total * 100) / 100;
+}
+
 // ===== Body compacto no formato pedido =====
 async function buildWeeklySummaryBody(userId: string, now: Date, txRows: any[]) {
   const startThis = new Date(now); startThis.setDate(startThis.getDate() - 7);
@@ -232,6 +270,7 @@ async function buildWeeklySummaryBody(userId: string, now: Date, txRows: any[]) 
   const { data: prevRows } = await supabaseAdmin
     .from("transactions").select("kind, amount")
     .eq("user_id", userId).gte("occurred_at", startPrev.toISOString()).lt("occurred_at", startThis.toISOString());
+  const upcomingTotal = await upcomingWeekObligationsTotal(userId, now);
 
   const isIncome = (t: any) => (t.kind ?? t.type) === "income";
   let income = 0, expense = 0;
@@ -270,6 +309,10 @@ async function buildWeeklySummaryBody(userId: string, now: Date, txRows: any[]) 
   lines.push(`🏆 *Categoria com maior gasto:* ${topCat.name}${topCat.v > 0 ? ` (${BRL(topCat.v)})` : ""}`);
   lines.push(`📝 *Movimentações:* ${txRows.length}`);
   if (hasPrev) lines.push(`📊 *Vs semana anterior:* ${deltaBal >= 0 ? "+" : ""}${BRL(deltaBal)}`);
+  if (upcomingTotal > 0) {
+    lines.push(``);
+    lines.push(`📅 *Próxima semana:* ${BRL(upcomingTotal)} em contas previstas.`);
+  }
   lines.push(``);
   lines.push(`💡 ${tip}`);
   return lines.join("\n");
@@ -289,7 +332,7 @@ async function buildWeeklyMessage(userId: string, name: string, now: Date) {
       .eq("user_id", userId).eq("active", true),
     supabaseAdmin.from("financial_goals").select("title, target_amount, current_amount").eq("user_id", userId),
     supabaseAdmin.from("appointments").select("id", { count: "exact", head: true })
-      .eq("user_id", userId).gte("when_at", now.toISOString()),
+      .eq("user_id", userId).gte("scheduled_at", now.toISOString()),
   ]);
 
   const list = (txThisR.data ?? []) as any[];
