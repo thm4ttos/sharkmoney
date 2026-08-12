@@ -1325,8 +1325,13 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           // só a data/hora ("hoje", "14h", "sim") — titleFromText some com
           // esses tokens e sobra "" (extra vazio), então o título antigo
           // continua intacto nesses casos.
+          // declinesTime também precisa excluir a extração de título — bug
+          // real: "Não sei a hora ainda, marca o compromisso pro dia"
+          // virou o TÍTULO do compromisso (sobrescrevendo "prova Policia
+          // em Alegre"), porque titleFromText não sabia que essa frase era
+          // uma resposta sobre horário, não uma descrição nova.
           let draftTitle: string = pending.title ?? "";
-          if (!isConfirmationPhrase(inputText)) {
+          if (!isConfirmationPhrase(inputText) && !declinesTime.test(inputText)) {
             const extra = titleFromText(inputText);
             if (extra && !isVagueApptTitle(extra)) draftTitle = extra;
           }
