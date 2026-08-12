@@ -3442,7 +3442,31 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
               }
             }
           }
+          // "Vai ser quinta-feira, errei" logo depois de criar um compromisso
+          // — sem nenhum outro assunto no meio — é sobre ESSE compromisso,
+          // não uma transação avulsa. Bug real: caía direto em
+          // correctLastTransaction, que só conhece `transactions` e não achava
+          // nada, respondendo "não achei um lançamento recente pra corrigir".
+          // Só intercepta quando a mensagem tem sinal real de data/hora E
+          // existe um compromisso criado nos últimos 30min (janela curta —
+          // "acabei de criar" — nunca resolve contra algo de dias atrás).
+          let handledAsAppointment = false;
           if (!handledAsBillOrInstallment) {
+            const { parseFutureDateTimeSP } = await import("@/lib/appointment-datetime.server");
+            const natCorrection = parseFutureDateTimeSP(inputText);
+            if (natCorrection.hasDate || natCorrection.hasTime) {
+              const apptActions = await import("@/lib/appointment-actions.server");
+              const recentAppt = await apptActions.findRecentlyCreatedAppointment(profile.id);
+              if (recentAppt) {
+                const merged = apptActions.mergeReschedule(recentAppt.scheduled_at, natCorrection) ?? natCorrection.iso;
+                if (merged) {
+                  replyText = await apptActions.rescheduleAppointment(profile.id, recentAppt, merged, phone);
+                  handledAsAppointment = true;
+                }
+              }
+            }
+          }
+          if (!handledAsBillOrInstallment && !handledAsAppointment) {
             const r = await actions.correctLastTransaction(profile.id, {
               correction_field: intent.correction_field, new_amount: intent.new_amount,
               new_category: intent.new_category, new_description: intent.new_description,

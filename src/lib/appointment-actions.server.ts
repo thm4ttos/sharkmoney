@@ -62,6 +62,31 @@ export async function listActiveAppointments(userId: string, limit = 5): Promise
 }
 
 /**
+ * Compromisso criado há poucos minutos — usado quando uma mensagem logo
+ * depois da criação corrige a data/hora ("vai ser quinta-feira, errei")
+ * sem citar o nome do compromisso. Janela curta de propósito: só cobre o
+ * caso "acabei de criar, é sobre isso mesmo", nunca resolve uma correção
+ * ambígua contra um compromisso de dias atrás. Bug real: essa mensagem
+ * caía direto em correctLastTransaction (só conhece `transactions`),
+ * nunca considerava o compromisso recém-criado.
+ */
+export async function findRecentlyCreatedAppointment(
+  userId: string, windowMs = 30 * 60 * 1000,
+): Promise<AppointmentRow | null> {
+  const since = new Date(Date.now() - windowMs).toISOString();
+  const { data } = await supabaseAdmin
+    .from("appointments")
+    .select("id, title, scheduled_at, status")
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as AppointmentRow) ?? null;
+}
+
+/**
  * Último compromisso mencionado em um lembrete enviado nas últimas horas.
  * Usado para manter o contexto: "Faltam 30 minutos para o churrasco" → "3".
  */
