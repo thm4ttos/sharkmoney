@@ -929,6 +929,19 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       if (rawCtx?.period || rawCtx?.installments_list) lastCtx = rawCtx;
     }
 
+    // ⚠️ Bug real (afeta TODO usuário que corrige um parcelamento/conta e
+    // depois manda qualquer outra coisa): "installment_followup"/
+    // "bill_followup" são pendências OPCIONAIS — só existem pra aceitar uma
+    // correção adicional ("na verdade são 220 parcelas") se o usuário quiser
+    // mandar mais uma, nunca uma pergunta que precisa de resposta direta. Mas
+    // como praticamente todo detector espontâneo deste arquivo exige
+    // `!pending`, essa pendência (que se renovava por 24h a cada correção,
+    // agora reduzida pra 30min) bloqueava qualquer mensagem nova e sem
+    // relação — inclusive "Paguei o consórcio" — jogando tudo pra IA em vez
+    // do fluxo determinístico certo. `isSoftFollowupPending` marca esses
+    // casos pra quem precisar tratá-los como "sem pendência bloqueante".
+    const isSoftFollowupPending = pending?.kind === "installment_followup" || pending?.kind === "bill_followup";
+
     const normalized = (inputText || "").trim().toLowerCase().replace(/[!.,?¿¡;:]+$/g, "");
     const YES_RE = /^(s|sim|claro|isso|isso mesmo|com certeza|tenho certeza|confirmar|confirmo|confirma|pode|pode apagar|pode ser|pode sim|ok|okay|👍|✅|sim,?\s*(apagar|apaga|excluir|deletar|zerar|pode)( tudo)?|apagar tudo|apaga tudo|excluir tudo|zerar tudo|manda ver|vai|bora)$/i;
     const NO_RE = /^(n|nao|não|cancelar|cancela|deixa|deixa assim|desconsidera|desconsiderar|esquece|nada|para|pare|negativo|❌)$/i;
@@ -1627,7 +1640,12 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     // Antes de qualquer criação de despesa, verificamos se o usuário está
     // atualizando uma conta fixa existente ("paguei 200 do aluguel, resta 400",
     // "quitei o aluguel", "abati 300 da internet", "paguei metade da fatura").
-    if (!imageUrl && !pending && inputText) {
+    // isSoftFollowupPending: uma pendência de "quer corrigir mais alguma coisa
+    // do parcelamento/conta que você acabou de criar" NÃO pode bloquear uma
+    // mensagem completamente diferente e clara como "paguei X" — bug real:
+    // "Paguei o consórcio" caiu na IA genérica (intent="clarify") porque
+    // havia um installment_followup pendente de uma correção anterior.
+    if (!imageUrl && (!pending || isSoftFollowupPending) && inputText) {
       const actionsMod = await import("@/lib/brinzap-actions.server");
 
       // ⚠️ Bug real e grave já observado em produção: "Compra parcelada mudar
@@ -1798,7 +1816,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     }
 
     // ===== Detecção espontânea: pagamento TOTAL de conta fixa =====
-    if (!imageUrl && !pending && /pag(uei|o|ou|amos)|quit(ei|ado|amos)|efetuado|pagamento (feito|realizado)/i.test(inputText)) {
+    if (!imageUrl && (!pending || isSoftFollowupPending) && /pag(uei|o|ou|amos)|quit(ei|ado|amos)|efetuado|pagamento (feito|realizado)/i.test(inputText)) {
       const actionsMod = await import("@/lib/brinzap-actions.server");
       const bills = await actionsMod.findPendingBillsForUser(profile.id, inputText);
       if (bills.length > 0) {
@@ -2043,7 +2061,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
                   phone, name: profile.name ?? null,
                   pending_action: {
                     kind: "installment_followup", installment_id: data.id, title: data.title,
-                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
                   } as any,
                 },
                 { onConflict: "phone" },
@@ -2086,7 +2104,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
                     bill_id: bill.id,
                     title: bill.title,
                     total: patch!.total_installments ?? bill.total_installments ?? null,
-                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
                   } as any,
                 },
                 { onConflict: "phone" },
@@ -2110,7 +2128,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
                   phone, name: profile.name ?? null,
                   pending_action: {
                     kind: "installment_followup", installment_id: inst.id, title: inst.title,
-                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
                   } as any,
                 },
                 { onConflict: "phone" },
@@ -2143,7 +2161,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           await supabaseAdmin.from("wa_contacts").upsert(
             {
               phone, name: profile.name ?? null,
-              pending_action: { kind: "bill_followup", bill_id: r.billId, title: pending.draft?.title ?? null, total: pending.draft?.total_installments ?? null, expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() } as any,
+              pending_action: { kind: "bill_followup", bill_id: r.billId, title: pending.draft?.title ?? null, total: pending.draft?.total_installments ?? null, expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() } as any,
             },
             { onConflict: "phone" });
         } else {
@@ -2211,7 +2229,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
               phone, name: profile.name ?? null,
               pending_action: {
                 kind: "installment_followup", installment_id: res.row.id, title: draft.title,
-                expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
               } as any,
             },
             { onConflict: "phone" });
@@ -2301,7 +2319,12 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
 
     let intent: any;
     let aiMs = 0;
-    const smartParsed = (!pending && !imageUrl)
+    // (!pending || isSoftFollowupPending): mesma tolerância de acima — uma
+    // pendência opcional de "corrigir mais alguma coisa do parcelamento/
+    // conta recém-criado" nunca pode bloquear o reconhecimento de uma
+    // mensagem nova e sem relação (ex.: "Gastei 50 no mercado" logo depois
+    // de corrigir um parcelamento).
+    const smartParsed = ((!pending || isSoftFollowupPending) && !imageUrl)
       ? actions.parseSmartFinancialMessage(inputText) : null;
 
     // REGRA CRÍTICA — Registro tem prioridade absoluta sobre consulta.
@@ -2309,7 +2332,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     // com valor monetário, NÃO roteia para relatório mesmo que exista referência
     // temporal ("ontem", "semana passada"). "Gastei 79 ontem" precisa registrar,
     // não gerar relatório do período.
-    const spontHit = (!pending && !imageUrl)
+    const spontHit = ((!pending || isSoftFollowupPending) && !imageUrl)
       ? actions.detectSpontaneousExpenseIntent(inputText || "")
       : null;
     const bulkFinancialHit = !!(smartParsed?.ok && smartParsed.items.length >= 1);
@@ -2317,7 +2340,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     // Detecção determinística de consultas por módulo — SEMPRE antes da IA,
     // para garantir que perguntas sobre contas fixas, dívidas, metas, hábitos etc.
     // consultem o módulo correto no banco (nunca respondem via Agenda).
-    const moduleQuery = (!pending && !imageUrl && !spontHit && !bulkFinancialHit)
+    const moduleQuery = ((!pending || isSoftFollowupPending) && !imageUrl && !spontHit && !bulkFinancialHit)
       ? detectModuleQueryIntent(inputText, lastCtx) : null;
 
     // Metadados do anexo lido nesta mensagem (hash, texto, OCR, operação).
@@ -3449,7 +3472,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
             await supabaseAdmin.from("wa_contacts").upsert(
               {
                 phone, name: profile.name ?? null,
-                pending_action: { kind: "bill_followup", bill_id: billRes.billId, title: intent.title ?? null, total: totalInst ?? null, expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() } as any,
+                pending_action: { kind: "bill_followup", bill_id: billRes.billId, title: intent.title ?? null, total: totalInst ?? null, expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() } as any,
               },
               { onConflict: "phone" });
           }
@@ -3524,7 +3547,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
                 phone, name: profile.name ?? null,
                 pending_action: {
                   kind: "installment_followup", installment_id: instRes.row.id, title,
-                  expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                  expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
                 } as any,
               },
               { onConflict: "phone" },
