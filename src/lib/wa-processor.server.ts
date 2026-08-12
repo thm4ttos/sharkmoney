@@ -953,8 +953,20 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     let pending: any = null;
     let lastCtx: { period?: any; ask?: any; at?: string; installments_list?: any[] } | null = null;
     {
-      const { data: contact } = await supabaseAdmin
-        .from("wa_contacts").select("id, pending_action, last_query_context").eq("phone", phone).maybeSingle();
+      // Busca por TODAS as variantes do telefone (com/sem 9º dígito), não só
+      // igualdade exata: uma pendência pode ter sido gravada por outro fluxo
+      // (ex.: convite do Modo Casal) usando `profiles.phone`, que pode estar
+      // num formato diferente do que a Z-API manda pra essa pessoa de
+      // verdade — bug real que fazia "aceitar"/"recusar" nunca encontrar a
+      // pendência e cair na resposta genérica. `order + limit(1)` em vez de
+      // `.maybeSingle()` porque, se sobrou alguma linha duplicada de antes
+      // desse fix, pega a mais recente em vez de quebrar.
+      const { data: contacts } = await supabaseAdmin
+        .from("wa_contacts").select("id, pending_action, last_query_context")
+        .in("phone", phoneLookupVariants(phone))
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      const contact = contacts?.[0] ?? null;
       // REGRA: enquanto dentro do prazo, a pendência é válida até ser concluída
       // ou cancelada pelo usuário — o tempo sozinho não a encerra. Mas toda
       // pendência com `expires_at` VENCIDO é lixo de um fluxo abandonado, e
