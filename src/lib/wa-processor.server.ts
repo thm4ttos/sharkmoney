@@ -3513,6 +3513,11 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
                 if (merged) {
                   replyText = await apptActions.rescheduleAppointment(profile.id, target as any, merged, phone);
                   handledAsAppointment = true;
+                  // Bug real: sem isso, a confirmação desta correção saía
+                  // sem raw.appointment_id — uma SEGUNDA correção respondendo
+                  // a ESTA mensagem (em vez da de criação original) perdia a
+                  // ligação e caía de volta no heurístico de 30min.
+                  savedAppointmentId = target.id;
                 }
               }
             }
@@ -3534,6 +3539,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
                   .eq("id", target.id).eq("user_id", profile.id);
                 replyText = `✅ Nome atualizado!\n\n📝 ${newTitle}\n🕒 ${apptActions.prettyAppointmentDate(target.scheduled_at)}`;
                 handledAsAppointment = true;
+                savedAppointmentId = target.id;
               }
             }
           }

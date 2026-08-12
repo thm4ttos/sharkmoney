@@ -148,12 +148,20 @@ export function parseFutureDateTimeSP(text: string, base = new Date()): FutureDa
   const t4 = norm.match(/\b(\d{1,2})\s*(?:e|:)\s*(meia|\d{1,2})\b/);
   const t5 = norm.match(/\b(?:as\s+)?(uma|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze)\b/);
   const t6 = norm.match(/\b(\d{1,2})\s*(am|pm)\b/);
+  // "pras 08", "pro 8", "para as 8" — contrações comuns de "para + às/o" antes
+  // de um número solto (sem "h"/"horas"). Bug real: "Mudar o horário pras 08"
+  // não batia em nenhum padrão acima (todos exigem sufixo "h"/"horas" ou já
+  // vêm por extenso) e o horário nunca era reconhecido. A preposição aqui é
+  // OBRIGATÓRIA (não opcional como em t2/t3/t5) — um número solto sem
+  // preposição nem sufixo é ambíguo demais pra virar hora.
+  const t7 = norm.match(/\b(?:pras|pra\s+as|pro|para\s+as|para\s+o)\s+(\d{1,2})\b/);
   if (t1) { hh = +t1[1]; mm = +t1[2]; }
   else if (t2) { hh = +t2[1]; }
   else if (t3) { hh = +t3[1]; }
   else if (t4) { hh = +t4[1]; mm = t4[2] === "meia" ? 30 : +t4[2]; }
   else if (t5) { hh = HOUR_WORDS[t5[1]]; }
   else if (t6) { hh = +t6[1]; if (t6[2] === "pm" && hh < 12) hh += 12; if (t6[2] === "am" && hh === 12) hh = 0; }
+  else if (t7) { hh = +t7[1]; }
   else if (/\bmeio[\s-]?dia\b/.test(norm)) { hh = 12; }
   else if (/\bmeia[\s-]?noite\b/.test(norm)) { hh = 0; }
 
