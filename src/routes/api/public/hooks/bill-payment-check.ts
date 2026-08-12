@@ -10,7 +10,7 @@
 //    cobrança "ainda não confirmamos o pagamento". Marca 'late'.
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { sendWhatsAppText } from "@/lib/uazapi.server";
+import { sendReplyWithOptions } from "@/lib/uazapi.server";
 
 const ok = (b: unknown = { ok: true }) =>
   new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -151,10 +151,14 @@ async function sendBatch(targets: any[], today: string, mode: "morning" | "eveni
       ? `🔔 *Hoje vence sua${pending.length > 1 ? "s contas fixas" : " conta fixa"}:*`
       : `⚠️ *Ainda não identificamos o pagamento desta${pending.length > 1 ? "s contas fixas" : " conta fixa"}:*`;
     const question = mode === "morning" ? "Ela já foi paga?" : "Ela foi paga?";
-    const footer = `\n\nTotal: *${BRL(total)}*\n\n${question}\n\n1️⃣ Sim, paguei.\n2️⃣ Ainda não paguei.\n3️⃣ Adiar\n\n_Responda com *1*, *2*, *3* ou algo como "paguei" / "ainda não" / "adiar"._`;
+    const footer = `\n\nTotal: *${BRL(total)}*\n\n${question}`;
     const text = `${header}\n\n${lines}${footer}`;
 
-    const res = await sendWhatsAppText(phone, text);
+    const res = await sendReplyWithOptions(phone, text, [
+      { id: "paid", label: "Já paguei" },
+      { id: "not_yet", label: "Ainda não" },
+      { id: "postpone", label: "Adiar" },
+    ]);
     if (!res.ok) {
       console.error("[bill-payment-check] send failed", res);
       continue;

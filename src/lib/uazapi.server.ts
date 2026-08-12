@@ -150,6 +150,104 @@ export async function sendWhatsAppText(toPhone: string, text: string): Promise<S
   };
 }
 
+export type WhatsAppButton = { id: string; label: string };
+
+/**
+ * Botões de resposta rápida (WhatsApp, via Z-API send-button-list). Máximo
+ * 3 botões (limite da própria plataforma WhatsApp). A Z-API documenta
+ * instabilidade nesse recurso e exige aceite prévio dos "termos de uso dos
+ * botões" no painel deles — por isso NUNCA chame isso diretamente num fluxo
+ * que precisa de garantia de entrega; use sempre `sendReplyWithOptions`,
+ * que cai automaticamente pra texto puro se isso falhar por qualquer motivo.
+ */
+export async function sendWhatsAppButtons(toPhone: string, message: string, buttons: WhatsAppButton[]): Promise<SendResult> {
+  const creds = await loadZapiCreds();
+  if (!creds.instanceId || !creds.instanceToken || !creds.clientToken) {
+    const err = `Z-API creds ausentes (source=${creds.source}, hasId=${!!creds.instanceId}, hasToken=${!!creds.instanceToken}, hasClientToken=${!!creds.clientToken})`;
+    console.error("[zapi] " + err);
+    return { ok: false, url: "", error: err, credsSource: creds.source };
+  }
+
+  const url = `https://api.z-api.io/instances/${creds.instanceId}/token/${creds.instanceToken}/send-button-list`;
+  console.log(`[zapi] send-button-list → ${toPhone} (creds=${creds.source}, instance=${creds.instanceId}, buttons=${buttons.length})`);
+
+  let lastErr: any = null;
+  let lastStatus: number | undefined;
+  let lastBody: string | undefined;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Client-Token": creds.clientToken },
+        body: JSON.stringify({
+          phone: toPhone, message,
+          buttonList: { buttons: buttons.map((b) => ({ id: b.id, label: b.label })) },
+        }),
+      });
+
+      const body = await res.text().catch(() => "");
+      lastStatus = res.status;
+      lastBody = body;
+
+      let json: any = null;
+      try { json = JSON.parse(body); } catch { /* ignore */ }
+
+      if (res.ok) {
+        console.log(`[zapi] send-button-list OK attempt=${attempt} status=${res.status} resp=${body.slice(0, 200)}`);
+        return { ok: true, status: res.status, url, response: json ?? { raw: body }, credsSource: creds.source };
+      }
+
+      console.error(`[zapi] send-button-list FAIL attempt=${attempt}/${MAX_ATTEMPTS} status=${res.status} body=${body.slice(0, 300)}`);
+
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, url, response: json ?? { raw: body }, error: "ZAPI_CLIENT_TOKEN_INVALID", credsSource: creds.source };
+      }
+      if (!isRetryableStatus(res.status)) {
+        return { ok: false, status: res.status, url, response: json ?? { raw: body }, error: `ZAPI_SEND_FAILED_${res.status}`, credsSource: creds.source };
+      }
+      lastErr = new Error(`ZAPI_SEND_FAILED_${res.status}`);
+    } catch (err: any) {
+      console.error(`[zapi] send-button-list NETWORK ERROR attempt=${attempt}/${MAX_ATTEMPTS}:`, err?.message || err);
+      lastErr = err;
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      await sleep(BASE_DELAY_MS * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 200));
+    }
+  }
+
+  return {
+    ok: false,
+    status: lastStatus,
+    url,
+    response: lastBody ? { raw: lastBody } : null,
+    error: lastErr?.message ?? "ZAPI_SEND_FAILED_RETRY_EXHAUSTED",
+    credsSource: creds.source,
+  };
+}
+
+/**
+ * Envia uma pergunta com botões de resposta rápida (até 3 opções) e cai
+ * automaticamente pra texto puro (opções listadas inline) se o envio de
+ * botão falhar por qualquer motivo — token/ToS de botões não aceito no
+ * painel da Z-API, instabilidade documentada da própria Z-API nesse
+ * recurso, erro de rede, etc. O fluxo do usuário NUNCA trava esperando um
+ * botão: digitar o rótulo da opção sempre funciona igual a tocar nela,
+ * então cair pra texto não muda o resultado, só a forma de responder.
+ * Sem `options` (null/undefined), comportamento idêntico a `sendWhatsAppText`.
+ */
+export async function sendReplyWithOptions(toPhone: string, text: string, options?: WhatsAppButton[] | null): Promise<SendResult> {
+  if (options && options.length >= 2 && options.length <= 3) {
+    const res = await sendWhatsAppButtons(toPhone, text, options);
+    if (res.ok) return res;
+  }
+  const fallbackText = options && options.length
+    ? `${text}\n\nResponda: ${options.map((o) => o.label).join(" / ")}`
+    : text;
+  return sendWhatsAppText(toPhone, fallbackText);
+}
+
 export async function sendWhatsAppImage(toPhone: string, imageUrl: string, caption?: string): Promise<SendResult> {
   const creds = await loadZapiCreds();
   if (!creds.instanceId || !creds.instanceToken || !creds.clientToken) {

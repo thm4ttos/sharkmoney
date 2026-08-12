@@ -78,10 +78,11 @@ export const createCoupleInvite = createServerFn({ method: "POST" })
     }
 
     const requesterName = (myProfile?.name || "Alguém").split(" ")[0];
-    const { sendWhatsAppText } = await import("@/lib/uazapi.server");
-    await sendWhatsAppText(
+    const { sendReplyWithOptions } = await import("@/lib/uazapi.server");
+    await sendReplyWithOptions(
       partnerProfile.phone,
-      `💙 *${requesterName}* te convidou pro *Modo Casal* do Abio — depois de aceitar, vocês passam a ver as receitas e despesas um do outro automaticamente, num painel só do casal.\n\nResponda *sim* para aceitar ou *não* para recusar.`,
+      `💙 *${requesterName}* te convidou pro *Modo Casal* do Abio — depois de aceitar, vocês passam a ver as receitas e despesas um do outro automaticamente, num painel só do casal.`,
+      [{ id: "accept", label: "Aceitar" }, { id: "reject", label: "Recusar" }],
     );
     await supabaseAdmin.from("wa_contacts").upsert(
       {

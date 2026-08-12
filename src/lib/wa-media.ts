@@ -7,6 +7,9 @@ export type WhatsappMedia = {
   documentName?: string;
   documentMime?: string;
   hasDocument: boolean;
+  /** Presente quando a mensagem é o toque num botão interativo (Z-API `buttonsResponseMessage`). */
+  buttonReplyId?: string;
+  buttonReplyLabel?: string;
 };
 
 /** Normaliza os formatos de webhook usados pela Z-API/UAZAPI em um único lugar. */
@@ -34,9 +37,17 @@ export function extractWhatsappMedia(raw: any): WhatsappMedia {
     String(documentMime ?? "").toLowerCase().includes("pdf") ||
     String(documentName ?? "").toLowerCase().endsWith(".pdf"),
   );
+  // Toque em botão interativo (Z-API `send-button-list`) — sem campo de texto
+  // próprio, então tratamos o RÓTULO do botão tocado como se fosse o texto
+  // digitado: todo o resto do pipeline (regex de sim/não, parser de data,
+  // etc.) interpreta igual, sem precisar saber que veio de um toque.
+  const buttonsResponse = raw?.buttonsResponseMessage ?? envelope?.buttonsResponseMessage ?? msg?.buttonsResponseMessage;
+  const buttonReplyId = buttonsResponse?.buttonId;
+  const buttonReplyLabel = buttonsResponse?.message;
+
   const text = raw?.text?.message ?? envelope?.text?.message ?? msg?.text?.message ??
     (typeof msg?.text === "string" ? msg.text : undefined) ?? msg?.body ??
-    nested?.conversation ?? nested?.extendedTextMessage?.text;
+    nested?.conversation ?? nested?.extendedTextMessage?.text ?? buttonReplyLabel;
   const audioUrl = raw?.audio?.audioUrl ?? envelope?.audio?.audioUrl ?? msg?.audio?.audioUrl ??
     msg?.audio?.url ?? nested?.audioMessage?.url ??
     (messageType === "audio" ? (msg?.mediaUrl ?? msg?.url ?? envelope?.mediaUrl ?? envelope?.url) : undefined);
@@ -46,5 +57,5 @@ export function extractWhatsappMedia(raw: any): WhatsappMedia {
   const imageCaption = raw?.image?.caption ?? envelope?.image?.caption ?? msg?.image?.caption ??
     nested?.imageMessage?.caption ?? document?.caption;
 
-  return { text, audioUrl, imageUrl, imageCaption, documentUrl, documentName, documentMime, hasDocument };
+  return { text, audioUrl, imageUrl, imageCaption, documentUrl, documentName, documentMime, hasDocument, buttonReplyId, buttonReplyLabel };
 }

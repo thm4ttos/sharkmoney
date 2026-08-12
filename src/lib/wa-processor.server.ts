@@ -94,13 +94,15 @@ async function sendReplyWithCriticalGuard(
     savedTxId?: string | null;
     savedAppointmentId?: string | null;
   },
+  options?: { id: string; label: string }[] | null,
 ): Promise<{ ok: boolean; result: any }> {
-  const { sendWhatsAppText } = await import("@/lib/uazapi.server");
-  let result = await sendWhatsAppText(toPhone, text);
+  const { sendWhatsAppText, sendReplyWithOptions } = await import("@/lib/uazapi.server");
+  const send = () => (options ? sendReplyWithOptions(toPhone, text, options) : sendWhatsAppText(toPhone, text));
+  let result = await send();
   if (!result.ok) {
     // Segunda chance depois de 800ms — cobre indisponibilidade momentânea da Z-API.
     await new Promise((r) => setTimeout(r, 800));
-    result = await sendWhatsAppText(toPhone, text);
+    result = await send();
   }
   if (!result.ok) {
     const savedSomething = !!(ctx.savedTxId || ctx.savedAppointmentId);
@@ -1182,8 +1184,10 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     if (pending && pending.kind === "couple_invite_pending" && !imageUrl) {
       const { sendWhatsAppText } = await import("@/lib/uazapi.server");
       const normLower = normalized.toLowerCase().trim();
-      const wantsAccept = YES_RE.test(normLower);
-      const wantsReject = NO_RE.test(normLower);
+      // Além de sim/não, "aceitar"/"recusar" são os rótulos dos botões dessa
+      // pergunta — digitar a palavra tem que funcionar exatamente igual ao toque.
+      const wantsAccept = YES_RE.test(normLower) || /^aceit(o|ar|a)$/i.test(normLower);
+      const wantsReject = NO_RE.test(normLower) || /^recus(o|ar|a)$/i.test(normLower);
       if (wantsAccept || wantsReject) {
         const nextStatus = wantsAccept ? "accepted" : "rejected";
         const { data: updatedLink } = await supabaseAdmin
@@ -3118,6 +3122,10 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     }
 
     let replyText = "";
+    // Botões de resposta rápida (até 3) pra anexar na pergunta — opcional,
+    // setado só nos poucos fluxos com pergunta de 2-3 opções já bem definida.
+    // sendReplyWithOptions cai pra texto puro sozinho se o envio falhar.
+    let replyButtons: { id: string; label: string }[] | null = null;
     let savedTxId: string | null = null;
     let savedAppointmentId: string | null = null;
     const expiresIn5min = () => new Date(Date.now() + 5 * 60 * 1000).toISOString();
@@ -3321,6 +3329,7 @@ Está correto? Responda *sim* ou *não*.`;
 
 Não registrei nada de novo. Devo usar o valor do comprovante?
 Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount)}.`;
+              replyButtons = [{ id: "yes", label: "Sim" }, { id: "no", label: "Não" }];
               break;
             }
           }
@@ -3416,6 +3425,15 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
               : vagueTitle(title) && !hasDate && !hasTime
               ? `${await pickApptReply("appointment_missing_date", phone)}\n\nEx.: _amanhã às 14h_`
               : await pickApptReply("appointment_missing_date", phone);
+            // Botões só quando falta a DATA — é um conjunto de opções fechado
+            // (hoje/amanhã/outro dia); hora não tem 2-3 opções óbvias, fica texto.
+            if (!hasDate) {
+              replyButtons = [
+                { id: "today", label: "Hoje" },
+                { id: "tomorrow", label: "Amanhã" },
+                { id: "other", label: "Outro dia" },
+              ];
+            }
             break;
           }
 
@@ -3900,7 +3918,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
       intent: intent.kind,
       savedTxId: savedTxId ?? (persistedIntents.has(intent.kind) ? undefined : null),
       savedAppointmentId,
-    });
+    }, replyButtons);
     console.log("[wa-processor][doc] stage=final_reply", { messageId: row.id, intent: intent.kind, ok: sendOk, document: isDocument });
     await supabaseAdmin.from("whatsapp_messages").update({
       transcription: audioUrl ? inputText : null,
