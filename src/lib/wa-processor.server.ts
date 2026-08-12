@@ -3247,7 +3247,24 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
 
           // Data/hora futura vinda do texto tem prioridade sobre a da IA.
           const nat = parseFutureDateTimeSP(srcText);
-          const scheduledAt = nat.iso && nat.hasDate && nat.hasTime ? nat.iso : intent.scheduled_at ?? nat.iso ?? undefined;
+          // ⚠️ Bug real: nat.iso SEMPRE tem um valor (o parser assume "hoje"
+          // quando só a hora foi dita), então checar apenas "scheduledAt
+          // existe?" nunca detectava "só falta o dia" — "11:30 buscar
+          // escola" (hora presente, dia ausente) ou caía numa data
+          // adivinhada em silêncio, ou (quando a IA mandava algo malformado
+          // tipo "11:30" como scheduled_at) era rejeitado pelo
+          // recordAppointment com a mensagem genérica "preciso do que é e
+          // quando". O que realmente importa é hasDate/hasTime, não a mera
+          // presença de uma string — um scheduled_at da IA só conta como
+          // sinal de data/hora reais quando é uma data de verdade (parseável).
+          const aiScheduledAtValid = !!intent.scheduled_at && !isNaN(new Date(intent.scheduled_at as string).getTime());
+          const hasDate = nat.hasDate || aiScheduledAtValid;
+          const hasTime = nat.hasTime || aiScheduledAtValid;
+          const scheduledAt = (nat.hasDate && nat.hasTime)
+            ? nat.iso
+            : aiScheduledAtValid
+            ? intent.scheduled_at
+            : undefined;
           const scored = scoreAppointmentIntent({
             text: srcText,
             hasScheduledAt: Boolean(scheduledAt),
@@ -3257,24 +3274,24 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
           const { isVagueApptTitle: vagueTitle } = await import("@/lib/appointment-nlp.server");
 
           // Falta informação → pergunta ESPECÍFICA (nunca mensagem financeira).
-          if (!scheduledAt || !nat.hasTime && !intent.scheduled_at) {
+          if (!hasDate || !hasTime) {
             await supabaseAdmin.from("wa_contacts").upsert(
               {
                 phone, name: profile.name ?? null,
                 pending_action: {
                   kind: "appointment_draft", title, notes,
-                  partial_iso: nat.iso ?? null, has_date: nat.hasDate, has_time: nat.hasTime,
+                  partial_iso: nat.iso ?? null, has_date: hasDate, has_time: hasTime,
                   expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
                 } as any,
               },
               { onConflict: "phone" },
             );
-            replyText = nat.hasDate && !nat.hasTime
+            replyText = hasDate && !hasTime
               ? await pickApptReply("appointment_missing_time", phone)
-              : !nat.hasDate && nat.hasTime
+              : !hasDate && hasTime
               ? await pickApptReply("appointment_missing_date", phone)
               // Exemplo só quando NÃO existe contexto algum (nem descrição, nem data/hora).
-              : vagueTitle(title) && !nat.hasDate && !nat.hasTime
+              : vagueTitle(title) && !hasDate && !hasTime
               ? `${await pickApptReply("appointment_missing_date", phone)}\n\nEx.: _amanhã às 14h_`
               : await pickApptReply("appointment_missing_date", phone);
             break;
