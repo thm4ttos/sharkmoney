@@ -477,7 +477,7 @@ function Page() {
       {/* ===== MODO CASAL ===== */}
       <Card title="Modo Casal" icon={Heart} delay={0.35}>
         <p className="text-sm text-muted-foreground">
-          Vincule sua conta com a do seu parceiro(a) e compartilhem gastos, contas, parcelamentos e metas escolhidos a dedo — o resto continua totalmente privado.
+          Vincule sua conta com a do seu parceiro(a) — depois do aceite, as receitas e despesas de vocês dois aparecem automaticamente num painel só do casal.
         </p>
         <Link to="/app/casal"
           className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground px-4 py-2.5 text-sm glow-neon hover:scale-[1.02] transition-smooth">

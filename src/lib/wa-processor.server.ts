@@ -1197,10 +1197,10 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         if (!updatedLink) {
           replyText = "Esse convite não está mais disponível (talvez já tenha sido respondido ou cancelado).";
         } else if (wantsAccept) {
-          replyText = `💙 Prontinho! Você e *${pending.requester_name || "seu parceiro(a)"}* agora estão no *Modo Casal*. Vocês podem compartilhar gastos, contas, parcelamentos e metas escolhidos a dedo pelo site — o resto continua totalmente privado.`;
+          replyText = `💙 Prontinho! Você e *${pending.requester_name || "seu parceiro(a)"}* agora estão no *Modo Casal*. As receitas e despesas de vocês dois já aparecem automaticamente pra ambos, num painel só do casal (site, aba Casal).`;
           const { data: requesterProfile } = await supabaseAdmin.from("profiles").select("phone").eq("id", pending.requester_id).maybeSingle();
           if (requesterProfile?.phone) {
-            await sendWhatsAppText(requesterProfile.phone, `🎉 *${profile?.name?.split(" ")[0] || "Seu parceiro(a)"}* aceitou seu convite! Agora vocês já podem compartilhar gastos no Modo Casal.`);
+            await sendWhatsAppText(requesterProfile.phone, `🎉 *${profile?.name?.split(" ")[0] || "Seu parceiro(a)"}* aceitou seu convite! Já dá pra ver o painel do casal no site.`);
           }
         } else {
           replyText = "Tudo bem, convite recusado. Se mudar de ideia, é só pedir pra pessoa te convidar de novo. 👍";
@@ -3453,13 +3453,17 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
           const { computeCoupleBalanceCore } = await import("@/lib/couple.functions");
           const balRaw = await computeCoupleBalanceCore(supabaseAdmin, profile.id);
           if (!balRaw.link) {
-            replyText = "Você ainda não tem um parceiro(a) vinculado(a) no *Modo Casal*. Convide pelo site (aba Casal) pra começar a compartilhar gastos. 💙";
+            replyText = "Você ainda não tem um parceiro(a) vinculado(a) no *Modo Casal*. Convide pelo site (aba Casal) pra vincular. 💙";
             break;
           }
           const bal = balRaw as any;
           const { data: partnerProfile } = await supabaseAdmin.from("profiles").select("name").eq("id", bal.partnerId).maybeSingle();
           const partnerName = (partnerProfile?.name || "seu parceiro(a)").split(" ")[0];
           const meIsRequester = bal.requesterId === profile.id;
+          const myIncome = meIsRequester ? bal.requesterIncome : bal.partnerIncome;
+          const myExpense = meIsRequester ? bal.requesterExpense : bal.partnerExpense;
+          const theirIncome = meIsRequester ? bal.partnerIncome : bal.requesterIncome;
+          const theirExpense = meIsRequester ? bal.partnerExpense : bal.requesterExpense;
           const myPaid = meIsRequester ? bal.requesterPaid : bal.partnerPaid;
           const theirPaid = meIsRequester ? bal.partnerPaid : bal.requesterPaid;
           const myDelta = meIsRequester ? bal.requesterDelta : -bal.requesterDelta;
@@ -3468,7 +3472,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
             : myDelta > 0
             ? `👉 *${partnerName}* te deve ${formatBRL(myDelta)}.`
             : `👈 Você deve ${formatBRL(Math.abs(myDelta))} pra *${partnerName}*.`;
-          replyText = `❤️ *Modo Casal — gastos compartilhados este mês*\n\n💸 Total: ${formatBRL(bal.total)}\nVocê pagou: ${formatBRL(myPaid)}\n${partnerName} pagou: ${formatBRL(theirPaid)}\n\n${balanceLine}`;
+          replyText = `❤️ *Modo Casal — este mês*\n\n*Você:* +${formatBRL(myIncome)} · -${formatBRL(myExpense)} (pagou ${formatBRL(myPaid)} de gastos do casal)\n*${partnerName}:* +${formatBRL(theirIncome)} · -${formatBRL(theirExpense)} (pagou ${formatBRL(theirPaid)} de gastos do casal)\n\n💸 Total de gastos do casal: ${formatBRL(bal.totalExpense)}\n${balanceLine}`;
           break;
         }
         case "query_balance": replyText = (await actions.queryBalance(profile.id, inputText || imageCaption || "")).replyText; break;

@@ -1,11 +1,11 @@
-// Modo Casal: vínculo com consentimento mútuo entre duas contas Abio, com
-// compartilhamento seletivo (só o que for marcado visibility='shared' —
-// tudo o mais continua privado, garantido pela RLS em couple_mode.sql).
+// Modo Casal: vínculo com consentimento mútuo entre duas contas Abio.
+// Depois de accepted, os dois enxergam automaticamente as receitas/despesas,
+// contas fixas, parcelamentos e metas um do outro — transparência total
+// entre o casal (o consentimento é no VÍNCULO, uma vez, mútuo e revogável a
+// qualquer momento — não item por item). Nada fica visível antes do aceite,
+// garantido pela RLS em couple_mode.sql (is_accepted_partner()).
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
-const SHAREABLE_TABLES = ["transactions", "recurring_bills", "installment_purchases", "financial_goals"] as const;
-type ShareableTable = (typeof SHAREABLE_TABLES)[number];
 
 async function getActiveAcceptedLink(supabase: any, userId: string) {
   const { data } = await supabase
@@ -81,7 +81,7 @@ export const createCoupleInvite = createServerFn({ method: "POST" })
     const { sendWhatsAppText } = await import("@/lib/uazapi.server");
     await sendWhatsAppText(
       partnerProfile.phone,
-      `💙 *${requesterName}* te convidou pro *Modo Casal* do Abio — vocês podem compartilhar gastos/contas/metas escolhidos a dedo, mantendo o resto privado.\n\nResponda *sim* para aceitar ou *não* para recusar.`,
+      `💙 *${requesterName}* te convidou pro *Modo Casal* do Abio — depois de aceitar, vocês passam a ver as receitas e despesas um do outro automaticamente, num painel só do casal.\n\nResponda *sim* para aceitar ou *não* para recusar.`,
     );
     await supabaseAdmin.from("wa_contacts").upsert(
       {
@@ -128,7 +128,7 @@ export const respondCoupleInvite = createServerFn({ method: "POST" })
         const { sendWhatsAppText } = await import("@/lib/uazapi.server");
         await sendWhatsAppText(
           requesterProfile.phone,
-          `🎉 *${(myProfile?.name || "Seu parceiro(a)").split(" ")[0]}* aceitou seu convite! Agora vocês já podem compartilhar gastos no Modo Casal.`,
+          `🎉 *${(myProfile?.name || "Seu parceiro(a)").split(" ")[0]}* aceitou seu convite! Já dá pra ver o painel do casal no site.`,
         );
       }
     }
@@ -174,26 +174,8 @@ export const updateSplitRatio = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const setItemVisibility = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data: { table: ShareableTable; id: string; visibility: "personal" | "shared" }) => data)
-  .handler(async ({ context, data }) => {
-    const { supabase, userId } = context;
-    if (!SHAREABLE_TABLES.includes(data.table)) throw new Error("Tabela inválida.");
-
-    if (data.visibility === "shared") {
-      const link = await getActiveAcceptedLink(supabase, userId);
-      if (!link) throw new Error("Você precisa ter um parceiro(a) vinculado(a) pra compartilhar.");
-    }
-
-    const { error } = await (supabase.from(data.table as any) as any)
-      .update({ visibility: data.visibility })
-      .eq("id", data.id).eq("user_id", userId);
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
-
-export const listSharedItems = createServerFn({ method: "GET" })
+/** Lançamentos/contas/parcelamentos/metas dos DOIS lados do vínculo aceito — a RLS já garante que só existe acesso depois de accepted. */
+export const listCoupleItems = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
@@ -203,20 +185,20 @@ export const listSharedItems = createServerFn({ method: "GET" })
     const ids = [userId, partnerId];
 
     const [{ data: tx }, { data: bills }, { data: inst }, { data: goals }] = await Promise.all([
-      supabase.from("transactions" as any).select("*").eq("visibility", "shared").in("user_id", ids).order("occurred_at", { ascending: false }).limit(100),
-      supabase.from("recurring_bills" as any).select("*").eq("visibility", "shared").in("user_id", ids),
-      supabase.from("installment_purchases" as any).select("*").eq("visibility", "shared").in("user_id", ids),
-      supabase.from("financial_goals" as any).select("*").eq("visibility", "shared").in("user_id", ids),
+      supabase.from("transactions" as any).select("*").in("user_id", ids).order("occurred_at", { ascending: false }).limit(200),
+      supabase.from("recurring_bills" as any).select("*").in("user_id", ids),
+      supabase.from("installment_purchases" as any).select("*").in("user_id", ids),
+      supabase.from("financial_goals" as any).select("*").in("user_id", ids),
     ]);
     return { link, partnerId, transactions: tx ?? [], bills: bills ?? [], installments: inst ?? [], goals: goals ?? [] };
   });
 
 /**
- * Núcleo do cálculo de saldo/divisão do casal — função simples (não
- * createServerFn) pra poder ser chamada tanto pelo site (client autenticado,
- * RLS) quanto pelo WhatsApp (supabaseAdmin, service role), sem duplicar a
- * lógica em dois lugares. Nunca cria transferência automática, só calcula
- * o desequilíbrio pra exibição.
+ * Núcleo do painel do casal (receitas/despesas de cada um + saldo/divisão)
+ * — função simples (não createServerFn) pra poder ser chamada tanto pelo
+ * site (client autenticado, RLS) quanto pelo WhatsApp (supabaseAdmin,
+ * service role), sem duplicar a lógica em dois lugares. Nunca cria
+ * transferência automática, só calcula o desequilíbrio pra exibição.
  */
 export async function computeCoupleBalanceCore(client: any, userId: string) {
   const link = await getActiveAcceptedLink(client, userId);
@@ -229,29 +211,50 @@ export async function computeCoupleBalanceCore(client: any, userId: string) {
 
   const { data: rows } = await client
     .from("transactions" as any)
-    .select("amount, user_id, paid_by_user_id")
-    .eq("visibility", "shared").eq("kind", "expense")
+    .select("amount, kind, user_id, paid_by_user_id, category")
     .in("user_id", [requesterId, partnerUserId]).gte("occurred_at", start);
 
+  const stats: Record<string, { income: number; expense: number }> = {
+    [requesterId]: { income: 0, expense: 0 },
+    [partnerUserId]: { income: 0, expense: 0 },
+  };
   const paidBy: Record<string, number> = {};
-  let total = 0;
+  const expenseByCategory: Record<string, number> = {};
+  let totalExpense = 0;
+
   for (const r of (rows ?? []) as any[]) {
-    const payer = r.paid_by_user_id ?? r.user_id;
     const amt = Number(r.amount) || 0;
-    paidBy[payer] = (paidBy[payer] ?? 0) + amt;
-    total += amt;
+    const owner = String(r.user_id);
+    if (!stats[owner]) stats[owner] = { income: 0, expense: 0 };
+    if (r.kind === "income") {
+      stats[owner].income += amt;
+    } else {
+      stats[owner].expense += amt;
+      const payer = r.paid_by_user_id ?? r.user_id;
+      paidBy[payer] = (paidBy[payer] ?? 0) + amt;
+      totalExpense += amt;
+      const cat = r.category || "Outros";
+      expenseByCategory[cat] = (expenseByCategory[cat] ?? 0) + amt;
+    }
   }
 
-  const requesterShare = Math.round(total * (Number(link.split_ratio_requester) / 100) * 100) / 100;
-  const partnerShare = Math.round((total - requesterShare) * 100) / 100;
-  const requesterPaid = Math.round((paidBy[requesterId] ?? 0) * 100) / 100;
-  const partnerPaid = Math.round((paidBy[partnerUserId] ?? 0) * 100) / 100;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const requesterShare = round2(totalExpense * (Number(link.split_ratio_requester) / 100));
+  const partnerShare = round2(totalExpense - requesterShare);
+  const requesterPaid = round2(paidBy[requesterId] ?? 0);
+  const partnerPaid = round2(paidBy[partnerUserId] ?? 0);
   // positivo = pagou mais que sua parte justa (o outro deve essa diferença)
-  const requesterDelta = Math.round((requesterPaid - requesterShare) * 100) / 100;
+  const requesterDelta = round2(requesterPaid - requesterShare);
 
   return {
-    link, total, requesterId, partnerId: partnerUserId,
+    link, requesterId, partnerId: partnerUserId,
+    totalExpense: round2(totalExpense),
+    requesterIncome: round2(stats[requesterId]?.income ?? 0),
+    requesterExpense: round2(stats[requesterId]?.expense ?? 0),
+    partnerIncome: round2(stats[partnerUserId]?.income ?? 0),
+    partnerExpense: round2(stats[partnerUserId]?.expense ?? 0),
     requesterShare, partnerShare, requesterPaid, partnerPaid, requesterDelta,
+    topCategories: Object.entries(expenseByCategory).map(([category, total]) => ({ category, total: round2(total) })).sort((a, b) => b.total - a.total),
     periodStart: start,
   };
 }

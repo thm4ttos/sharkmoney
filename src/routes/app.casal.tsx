@@ -1,20 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Heart, Send, Check, X, Unlink, Users } from "lucide-react";
+import { Heart, Send, Check, X, Unlink, Users, LayoutDashboard } from "lucide-react";
 import {
-  getCoupleStatus, createCoupleInvite, respondCoupleInvite, unlinkCouple,
-  updateSplitRatio, listSharedItems, computeCoupleBalance,
+  getCoupleStatus, createCoupleInvite, respondCoupleInvite, unlinkCouple, updateSplitRatio,
 } from "@/lib/couple.functions";
 
 export const Route = createFileRoute("/app/casal")({
   head: () => ({ meta: [{ title: "Casal · Abio" }] }),
   component: Page,
 });
-
-const BRL = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n ?? 0);
 
 function Page() {
   const qc = useQueryClient();
@@ -23,17 +20,12 @@ function Page() {
   const runRespond = useServerFn(respondCoupleInvite);
   const runUnlink = useServerFn(unlinkCouple);
   const runSplit = useServerFn(updateSplitRatio);
-  const runShared = useServerFn(listSharedItems);
-  const runBalance = useServerFn(computeCoupleBalance);
 
   const status = useQuery({ queryKey: ["couple-status"], queryFn: () => runStatus() as any });
   const link = (status.data as any)?.link ?? null;
   const role = (status.data as any)?.role ?? null;
   const partner = (status.data as any)?.partner ?? null;
   const isAccepted = link?.status === "accepted";
-
-  const shared = useQuery({ queryKey: ["couple-shared"], queryFn: () => runShared() as any, enabled: isAccepted });
-  const balance = useQuery({ queryKey: ["couple-balance"], queryFn: () => runBalance() as any, enabled: isAccepted });
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["couple-status"] });
@@ -66,7 +58,7 @@ function Page() {
         </div>
         <div>
           <h1 className="font-display text-3xl">Modo Casal</h1>
-          <p className="text-sm text-muted-foreground">Compartilhe gastos escolhidos a dedo com seu parceiro(a) — o resto continua privado.</p>
+          <p className="text-sm text-muted-foreground">Vincule sua conta à do seu parceiro(a) — depois do aceite, as receitas e despesas de vocês dois aparecem automaticamente num painel só do casal.</p>
         </div>
       </motion.header>
 
@@ -87,8 +79,6 @@ function Page() {
         <Accepted
           partnerName={partner?.name || "seu parceiro(a)"}
           link={link}
-          balance={balance.data as any}
-          shared={shared.data as any}
           onUnlink={() => mUnlink.mutate()}
           unlinking={mUnlink.isPending}
           onSplitChange={(v) => mSplit.mutate(v)}
@@ -159,7 +149,7 @@ function PendingReceived({ requesterName, onAccept, onReject, pending }: { reque
   return (
     <Card>
       <p className="font-display text-lg">{requesterName || "Alguém"} te convidou pro Modo Casal 💙</p>
-      <p className="text-sm text-muted-foreground mt-1">Vocês vão poder compartilhar gastos, contas, parcelamentos e metas escolhidos a dedo. O resto continua privado.</p>
+      <p className="text-sm text-muted-foreground mt-1">Se aceitar, as receitas, despesas, contas fixas, parcelamentos e metas de vocês dois passam a aparecer automaticamente pra ambos, num painel só do casal.</p>
       <div className="mt-4 flex gap-2">
         <button onClick={onAccept} disabled={pending}
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground px-4 py-2 text-sm glow-neon disabled:opacity-50">
@@ -174,13 +164,10 @@ function PendingReceived({ requesterName, onAccept, onReject, pending }: { reque
   );
 }
 
-function Accepted({ partnerName, link, balance, shared, onUnlink, unlinking, onSplitChange }: {
-  partnerName: string; link: any; balance: any; shared: any; onUnlink: () => void; unlinking: boolean; onSplitChange: (v: number) => void;
+function Accepted({ partnerName, link, onUnlink, unlinking, onSplitChange }: {
+  partnerName: string; link: any; onUnlink: () => void; unlinking: boolean; onSplitChange: (v: number) => void;
 }) {
   const [ratio, setRatio] = useState(String(link.split_ratio_requester ?? 50));
-  const items = shared
-    ? [...(shared.transactions ?? []), ...(shared.bills ?? []), ...(shared.installments ?? []), ...(shared.goals ?? [])]
-    : [];
 
   return (
     <div className="space-y-4">
@@ -188,63 +175,42 @@ function Accepted({ partnerName, link, balance, shared, onUnlink, unlinking, onS
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <p className="font-display text-lg">Vinculado com {partnerName} ❤️</p>
-            <p className="text-xs text-muted-foreground">Vocês compartilham só o que estiver marcado como compartilhado.</p>
+            <p className="text-xs text-muted-foreground">As receitas e despesas de vocês dois já aparecem automaticamente no painel do casal.</p>
           </div>
-          <button onClick={onUnlink} disabled={unlinking}
-            className="inline-flex items-center gap-2 rounded-xl border border-destructive/30 text-destructive px-3 py-2 text-xs hover:bg-destructive/10 disabled:opacity-50">
-            <Unlink className="h-3.5 w-3.5" /> {unlinking ? "Desvinculando..." : "Desvincular"}
+          <Link to="/app/casal-dashboard"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground px-4 py-2.5 text-sm glow-neon hover:scale-[1.02] transition-smooth">
+            <LayoutDashboard className="h-4 w-4" /> Ver Dashboard do Casal
+          </Link>
+        </div>
+      </Card>
+
+      <Card>
+        <p className="font-display text-lg mb-3">Divisão de gastos</p>
+        <p className="text-xs text-muted-foreground mb-3">
+          Percentual de quem convidou sobre o total de gastos do casal — usado só pra calcular o desequilíbrio no Dashboard, nunca cria transferência automática.
+        </p>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted-foreground">Divisão (% de quem convidou):</label>
+          <input value={ratio} onChange={(e) => setRatio(e.target.value)} inputMode="numeric"
+            className="w-16 bg-input rounded-lg px-2 py-1.5 text-xs" />
+          <button onClick={() => onSplitChange(Math.max(0, Math.min(100, Number(ratio) || 50)))}
+            className="rounded-lg bg-primary/20 text-primary border border-primary/30 px-2.5 py-1.5 text-xs hover:bg-primary/30">
+            Salvar
           </button>
         </div>
       </Card>
 
-      {balance ? (
-        <Card>
-          <p className="font-display text-lg mb-3">Saldo do mês</p>
-          <div className="grid sm:grid-cols-2 gap-3 text-sm">
-            <div className="rounded-xl border border-border bg-background/40 p-3">
-              <p className="text-xs text-muted-foreground">Total compartilhado</p>
-              <p className="font-display text-xl">{BRL(balance.total ?? 0)}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-background/40 p-3">
-              <p className="text-xs text-muted-foreground">Divisão combinada</p>
-              <p className="font-display text-xl">{Number(link.split_ratio_requester)}% / {100 - Number(link.split_ratio_requester)}%</p>
-            </div>
-          </div>
-          <p className="text-sm mt-3">
-            {Math.abs(balance.requesterDelta ?? 0) < 0.01
-              ? "✅ Está tudo em dia entre vocês."
-              : (balance.requesterDelta ?? 0) > 0
-              ? `${partnerName} deve ${BRL(balance.requesterDelta)} pra quem convidou.`
-              : `Quem convidou deve ${BRL(Math.abs(balance.requesterDelta))} pra ${partnerName}.`}
-          </p>
-          <div className="mt-4 flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">Divisão (% de quem convidou):</label>
-            <input value={ratio} onChange={(e) => setRatio(e.target.value)} inputMode="numeric"
-              className="w-16 bg-input rounded-lg px-2 py-1.5 text-xs" />
-            <button onClick={() => onSplitChange(Math.max(0, Math.min(100, Number(ratio) || 50)))}
-              className="rounded-lg bg-primary/20 text-primary border border-primary/30 px-2.5 py-1.5 text-xs hover:bg-primary/30">
-              Salvar
-            </button>
-          </div>
-        </Card>
-      ) : null}
-
       <Card>
-        <p className="font-display text-lg mb-3">Lançamentos compartilhados</p>
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nada compartilhado ainda. Marque um gasto, conta fixa, parcelamento ou meta como "compartilhado" nas telas de Transações, Contas Fixas, Compras Parceladas ou Metas.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {items.slice(0, 30).map((it: any) => (
-              <div key={it.id} className="flex items-center justify-between rounded-xl border border-border bg-background/40 px-3 py-2 text-sm">
-                <span className="truncate">{it.title || it.description || "Lançamento"}</span>
-                <span className="text-muted-foreground text-xs shrink-0 ml-2">{it.amount != null ? BRL(Number(it.amount)) : it.target_amount != null ? BRL(Number(it.target_amount)) : ""}</span>
-              </div>
-            ))}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-display text-lg">Desvincular</p>
+            <p className="text-xs text-muted-foreground">Encerra o compartilhamento na hora — o histórico do vínculo fica registrado, mas nenhum dado novo continua visível.</p>
           </div>
-        )}
+          <button onClick={onUnlink} disabled={unlinking}
+            className="inline-flex items-center gap-2 rounded-xl border border-destructive/30 text-destructive px-3 py-2 text-xs hover:bg-destructive/10 disabled:opacity-50 shrink-0">
+            <Unlink className="h-3.5 w-3.5" /> {unlinking ? "Desvinculando..." : "Desvincular"}
+          </button>
+        </div>
       </Card>
     </div>
   );

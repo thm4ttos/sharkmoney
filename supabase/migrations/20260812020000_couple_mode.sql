@@ -1,9 +1,9 @@
 -- Modo Casal: duas contas Abio podem se vincular com consentimento mútuo
--- (pending -> accepted/rejected, ou cancelled ao desvincular) e compartilhar
--- SOMENTE o que for explicitamente marcado visibility='shared'. Tudo
--- continua privado por padrão — nenhuma policy existente é reescrita, só
--- ACRESCENTAMOS uma segunda policy de SELECT por tabela (permissiva, então o
--- Postgres faz OR com a policy "dono" original que já existe).
+-- (pending -> accepted/rejected, ou cancelled ao desvincular). Depois de
+-- ACCEPTED, os dois passam a enxergar automaticamente as receitas/despesas,
+-- contas fixas, parcelamentos e metas um do outro (transparência total entre
+-- o casal) — o consentimento é no VÍNCULO (uma vez, mútuo, revogável), não
+-- item por item. Nada fica visível antes do aceite.
 
 CREATE TABLE public.couple_links (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -39,13 +39,9 @@ CREATE UNIQUE INDEX couple_links_active_pair ON public.couple_links (
 CREATE INDEX couple_links_requester_idx ON public.couple_links (requester_id);
 CREATE INDEX couple_links_partner_idx ON public.couple_links (partner_id);
 
--- Colunas de compartilhamento — default 'personal': nada muda de
--- comportamento pra quem não usa Modo Casal.
-ALTER TABLE public.transactions ADD COLUMN visibility text NOT NULL DEFAULT 'personal' CHECK (visibility IN ('personal','shared'));
+-- "Quem pagou de fato" uma despesa compartilhada (pro cálculo de saldo/
+-- divisão) — NULL = pago pelo próprio user_id da transação, não precisa backfill.
 ALTER TABLE public.transactions ADD COLUMN paid_by_user_id uuid REFERENCES public.profiles(id);
-ALTER TABLE public.recurring_bills ADD COLUMN visibility text NOT NULL DEFAULT 'personal' CHECK (visibility IN ('personal','shared'));
-ALTER TABLE public.installment_purchases ADD COLUMN visibility text NOT NULL DEFAULT 'personal' CHECK (visibility IN ('personal','shared'));
-ALTER TABLE public.financial_goals ADD COLUMN visibility text NOT NULL DEFAULT 'personal' CHECK (visibility IN ('personal','shared'));
 
 -- Helper reaproveitado nas 4 policies novas abaixo, mesmo espírito de has_role().
 CREATE OR REPLACE FUNCTION public.is_accepted_partner(_owner uuid)
@@ -61,13 +57,14 @@ $$;
 -- Policies aditivas de SELECT — a policy FOR ALL original de cada tabela
 -- (dono) continua intacta; isto só ACRESCENTA uma segunda policy permissiva,
 -- então o Postgres faz OR entre elas automaticamente. Nada fica visível pro
--- parceiro antes de status='accepted' (a função retorna false até lá), e
--- mesmo depois só o que estiver visibility='shared' aparece.
-CREATE POLICY "tx partner shared select" ON public.transactions FOR SELECT TO authenticated
-  USING (visibility = 'shared' AND public.is_accepted_partner(user_id));
-CREATE POLICY "bills partner shared select" ON public.recurring_bills FOR SELECT TO authenticated
-  USING (visibility = 'shared' AND public.is_accepted_partner(user_id));
-CREATE POLICY "installments partner shared select" ON public.installment_purchases FOR SELECT TO authenticated
-  USING (visibility = 'shared' AND public.is_accepted_partner(user_id));
-CREATE POLICY "goals partner shared select" ON public.financial_goals FOR SELECT TO authenticated
-  USING (visibility = 'shared' AND public.is_accepted_partner(user_id));
+-- parceiro antes de status='accepted' (a função retorna false até lá); depois
+-- do aceite, TUDO da tabela fica visível pro parceiro (transparência total,
+-- sem opt-in por item).
+CREATE POLICY "tx partner select" ON public.transactions FOR SELECT TO authenticated
+  USING (public.is_accepted_partner(user_id));
+CREATE POLICY "bills partner select" ON public.recurring_bills FOR SELECT TO authenticated
+  USING (public.is_accepted_partner(user_id));
+CREATE POLICY "installments partner select" ON public.installment_purchases FOR SELECT TO authenticated
+  USING (public.is_accepted_partner(user_id));
+CREATE POLICY "goals partner select" ON public.financial_goals FOR SELECT TO authenticated
+  USING (public.is_accepted_partner(user_id));
