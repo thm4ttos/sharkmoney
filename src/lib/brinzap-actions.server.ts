@@ -517,6 +517,10 @@ export type ReportOpts = {
   start?: string; // YYYY-MM-DD (inclusive)
   end?: string;   // YYYY-MM-DD (inclusive)
   label?: string;
+  /** Período é uma janela de média histórica (ex.: "normalmente"/"em média"), não um intervalo literal pedido. */
+  isAverage?: boolean;
+  /** Número de meses fechados usados na janela de média, para dividir o total. */
+  averageMonths?: number;
 };
 
 function pad(n: number) { return String(n).padStart(2, "0"); }
@@ -699,6 +703,18 @@ export function detectPeriodFromText(text: string): ReportOpts | null {
   if (/ultim[oa]s?\s+(sete|7)\s+dias?/.test(t)) return { range: "last_7_days" };
   if (/ultim[oa]s?\s+(trinta|30)\s+dias?/.test(t)) return { range: "last_30_days" };
   if (/\bultimo\s+m(e|ê)s\s+corrido\b|\bm(e|ê)s\s+corrido\b/.test(t)) return { range: "last_30_days" };
+  // "normalmente"/"em média"/"costumo gastar" SEM período explícito: usa os
+  // últimos 3 meses FECHADOS (exclui o mês corrente, ainda incompleto, que
+  // distorceria a média pra baixo). Espelha detectPeriodFromTextLocal em
+  // wa-processor.server.ts — mesma regra, mesmas duas funções irmãs.
+  if (/\bnormalmente\b|\bem\s+m[ée]dia\b|\bcostum[oa]\s+gast|\bm[ée]dia\s+mensal\b|\bm[ée]dia\s+de\s+gast/.test(t)) {
+    const endPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    const startWindow = new Date(endPrevMonth.getFullYear(), endPrevMonth.getMonth() - 2, 1);
+    return {
+      start: fmtDate(startWindow), end: fmtDate(endPrevMonth),
+      label: "Últimos 3 meses (média)", isAverage: true, averageMonths: 3,
+    };
+  }
   const lastMonths = t.match(/ultim[oa]s?\s+(\d{1,2})\s+(mes|meses|m(ê|e)s)/);
   if (lastMonths) {
     const n = Math.max(1, Math.min(24, parseInt(lastMonths[1], 10)));
@@ -931,6 +947,66 @@ ${lines}`,
 }
 
 
+
+// ================================================================
+// Memória financeira: "quanto gasto de combustível", "quanto gasto
+// normalmente com mercado". Reaproveita fetchAllTransactions + o mesmo
+// campo `category` já gravado na criação da despesa (KEYWORD_CATEGORY) —
+// nunca soma de novo com uma lógica paralela à do relatório por categoria.
+// ================================================================
+
+/**
+ * Total de uma categoria/assunto específico num período. `hint` é o texto
+ * literal que o usuário usou (ex.: "combustível", "mercado", "Fórum").
+ * Resolve pra uma categoria conhecida via inferTransactionCategory; se não
+ * resolver (cai em "Outros"), tenta um fallback aproximado por descrição.
+ */
+export async function queryCategoryTotal(
+  userId: string,
+  hint: string,
+  period: ReportOpts,
+): Promise<{ replyText: string; matched: boolean; category: string; total: number }> {
+  const { since, until } = computeRange(period);
+  const rows = await fetchAllTransactions(userId, since, until);
+  const head = periodHeaderLabel(since, until);
+
+  const category = inferTransactionCategory(hint);
+  const isKnownCategory = category !== "Outros";
+  const needle = normText(hint);
+
+  const matchedRows = rows.filter((r) => {
+    if (r.kind !== "expense") return false;
+    if (isKnownCategory) return (r.category || "Outros") === category;
+    return normText(r.description || "").includes(needle);
+  });
+
+  const total = matchedRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  const label = isKnownCategory ? category : hint;
+
+  if (matchedRows.length === 0) {
+    return {
+      replyText: `📭 Não encontrei gastos com *${label}*.\n📅 Período: ${head}`,
+      matched: false, category, total: 0,
+    };
+  }
+
+  const approxNote = isKnownCategory
+    ? ""
+    : "\n\n_Busquei por aproximação no texto dos lançamentos — pode não cobrir 100% dos casos._";
+
+  if (period.isAverage && period.averageMonths && period.averageMonths > 1) {
+    const avg = total / period.averageMonths;
+    return {
+      replyText: `📊 Sua média de gastos com *${label}* nos últimos ${period.averageMonths} meses foi de *${BRL(avg)}/mês*.\n💸 Total no período: ${BRL(total)}\n📅 ${head}${approxNote}`,
+      matched: true, category, total,
+    };
+  }
+
+  return {
+    replyText: `💸 Você gastou *${BRL(total)}* com *${label}*.\n📅 Período: ${head}${approxNote}`,
+    matched: true, category, total,
+  };
+}
 
 export async function queryAppointments(userId: string): Promise<{ replyText: string }> {
   const { data, error } = await supabaseAdmin
@@ -2636,7 +2712,7 @@ export type InstallmentListItem = { n: number; kind: "installment" | "bill"; id:
  * pra que "muda o vencimento do 2 pra dia 15" resolva o alvo certo sem o
  * usuário precisar repetir o nome.
  */
-export async function queryInstallments(userId: string): Promise<{ replyText: string; items: InstallmentListItem[] }> {
+export async function queryInstallments(userId: string, hint?: string): Promise<{ replyText: string; items: InstallmentListItem[] }> {
   const [{ data, error }, { data: bills }] = await Promise.all([
     supabaseAdmin
       .from("installment_purchases")
@@ -2652,11 +2728,25 @@ export async function queryInstallments(userId: string): Promise<{ replyText: st
       .order("created_at", { ascending: false }),
   ]);
   if (error) return { replyText: "Não consegui buscar seus parcelamentos 🙏.", items: [] };
-  const list = (data ?? []) as any[];
-  const billList = (bills ?? []) as any[];
+  let list = (data ?? []) as any[];
+  let billList = (bills ?? []) as any[];
   if (list.length === 0 && billList.length === 0) {
     return { replyText: "📭 Você não possui parcelamentos cadastrados.\n\n➕ Ex.: _Notebook 12x de R$ 250_", items: [] };
   }
+
+  // Filtra por um item específico ("quanto falta do Fórum") em vez de sempre
+  // listar tudo — mesmo padrão de queryBills.
+  const needle = (hint || "").toLowerCase().trim();
+  if (needle) {
+    const filteredList = list.filter((i) => (i.title || "").toLowerCase().includes(needle));
+    const filteredBillList = billList.filter((b) => (b.title || "").toLowerCase().includes(needle));
+    if (filteredList.length === 0 && filteredBillList.length === 0) {
+      return { replyText: `🔍 Não encontrei nenhum parcelamento com "${hint}". Envie *meus parcelamentos* para ver todos.`, items: [] };
+    }
+    list = filteredList;
+    billList = filteredBillList;
+  }
+
   // installment_purchases só guarda first_due_at (a data da 1ª parcela, fixa)
   // — o vencimento da PRÓXIMA parcela precisa ser derivado somando os meses
   // já pagos, senão volta a mostrar a 1ª parcela pra sempre mesmo depois de
@@ -2683,7 +2773,8 @@ export async function queryInstallments(userId: string): Promise<{ replyText: st
     const per = Number(b.amount || 0);
     lines.push(`${n} - *${b.title}* — ${info.paid}/${info.total} pagas\n${BRL(per)}/parcela · restam ${info.remaining} · próx. ${formatYMDBr(b.next_due_at)}`);
   }
-  return { replyText: `💳 *Seus parcelamentos*\n\n${lines.join("\n\n")}\n\nPra corrigir algum, é só dizer o número (ex.: _"2 vence dia 15"_ ou _"corrige o 1 pra R$900"_).`, items };
+  const header = needle ? `💳 *Parcelamentos — "${hint}"*` : "💳 *Seus parcelamentos*";
+  return { replyText: `${header}\n\n${lines.join("\n\n")}\n\nPra corrigir algum, é só dizer o número (ex.: _"2 vence dia 15"_ ou _"corrige o 1 pra R$900"_).`, items };
 }
 
 

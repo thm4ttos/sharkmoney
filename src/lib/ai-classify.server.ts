@@ -74,6 +74,16 @@ export type ClassifyItem = {
   closing_day?: number;
   /** Nome do cartão citado numa despesa ("no cartão Nubank") ou numa consulta de fatura. Vazio = cartão sem nome/padrão. */
   credit_card_hint?: string;
+  /** Assunto/categoria citado numa pergunta de gasto ("quanto gasto de combustível"), só em query_summary. Vazio = pergunta genérica (total do período). */
+  category_hint?: string;
+  /** Nome de uma conta fixa ou parcelamento específico citado na consulta ("minha conta de internet", "quanto falta do Fórum"), só em query_bills/query_installments. Vazio = lista tudo. */
+  hint?: string;
+  /** Recorte de contas fixas pedido, só em query_bills. */
+  filter?: "all" | "upcoming" | "overdue" | "pending";
+  /** "normalmente"/"em média"/"costumo gastar" sem período explícito, só em query_summary — pede uma janela histórica em vez de um período literal. */
+  is_average?: boolean;
+  /** Quantos meses fechados formam a janela de média (padrão 3), só quando is_average=true. */
+  average_months?: number;
 };
 
 export type ClassifyResult = ClassifyItem & {
@@ -201,6 +211,11 @@ const ITEM_FIELDS = {
   due_day: { type: "number", description: "Dia do mês do vencimento de uma conta fixa, parcelamento ou fatura de cartão (1-31). Extraia de frases como 'vence dia 10', 'todo dia 10', 'mensalmente dia 5'." },
   closing_day: { type: "number", description: "Dia do mês em que a fatura do cartão FECHA (1-31), só quando kind=create_credit_card. Ex.: 'fecha dia 3' → closing_day=3." },
   credit_card_hint: { type: "string", description: "Nome do cartão citado numa despesa ('no cartão Nubank', 'no crédito do Inter') ou numa consulta de fatura ('minha fatura do Nubank'). Deixe vazio se o usuário só disse 'no cartão'/'no crédito' sem nome — o sistema usa o cartão padrão." },
+  category_hint: { type: "string", description: "Só em query_summary: assunto/categoria específico citado na pergunta de gasto ('quanto gasto de combustível?', 'quanto gasto com mercado?', 'gasto médio de streaming'). Deixe vazio quando a pergunta for sobre o TOTAL geral do período (sem citar um assunto)." },
+  hint: { type: "string", description: "Só em query_bills/query_installments: nome de UMA conta fixa ou parcelamento específico citado ('minha conta de internet', 'quanto falta do Fórum', 'quando vence o consórcio'). Deixe vazio quando o usuário pedir a lista inteira." },
+  filter: { type: "string", enum: ["all", "upcoming", "overdue", "pending"], description: "Só em query_bills: recorte pedido — overdue='atrasadas', upcoming='vencendo em breve', pending='pendentes de pagamento'. Deixe 'all' (ou vazio) para 'todas as contas'." },
+  is_average: { type: "boolean", description: "Só em query_summary: true quando o usuário perguntou 'normalmente'/'em média'/'costumo gastar'/'média mensal' SEM citar um período explícito — pede uma janela histórica, não um mês específico." },
+  average_months: { type: "number", description: "Só quando is_average=true: quantos meses fechados considerar. Use 3 salvo o usuário pedir outro número explicitamente (ex.: 'média dos últimos 6 meses' → 6)." },
 } as const;
 
 const ITEM_KIND_ENUM = ["expense", "income", "appointment", "bill", "installment", "debt", "goal"] as const;
@@ -299,9 +314,11 @@ Consultas/comandos:
   • "este ano"/"ano atual" → year
   • Nome de mês específico ("junho", "relatório de maio", "janeiro de 2025") ou ano específico ("2025", "2024") → range="custom" e preencha range_start e range_end (YYYY-MM-DD, inclusive). Se o ano não for citado, use o ano atual; se o mês citado for futuro no ano atual, use o ano anterior.
   • range_label sempre preenchido com um rótulo humano ("Junho de 2025", "Últimos 7 dias", "Histórico completo").
+  • Se o usuário citar um assunto/categoria específico dentro da pergunta ("quanto gasto de combustível?", "quanto gasto normalmente com mercado?", "gasto médio de streaming"), preencha "category_hint" com esse assunto (ex.: "combustível", "mercado", "streaming") — o sistema filtra o total só daquela categoria em vez do total geral.
+  • "normalmente"/"em média"/"costumo gastar"/"média mensal" SEM período explícito → use is_average=true (e average_months, padrão 3) em vez de tentar calcular um range — o sistema monta a janela histórica sozinho.
 - query_appointments: SOMENTE compromissos de calendário/reuniões/eventos ("meus compromissos", "minha agenda de reuniões", "meus eventos"). NUNCA use para contas fixas ou pagamentos.
-- query_bills: consultas sobre contas fixas / mensais / recorrentes ("quais são minhas contas fixas?", "quais contas tenho cadastradas?", "quais contas vencem este mês?", "tenho aluguel cadastrado?", "quanto pago de internet?", "quais contas vencem dia 5?", "tenho contas atrasadas?", "qual o total das minhas contas fixas?", "liste minhas contas mensais", "minhas contas recorrentes", "meus compromissos financeiros"). Consulta APENAS o módulo Contas Fixas.
-- query_installments: parcelamentos ("meus parcelamentos", "quantas parcelas faltam").
+- query_bills: consultas sobre contas fixas / mensais / recorrentes ("quais são minhas contas fixas?", "quais contas tenho cadastradas?", "quais contas vencem este mês?", "tenho aluguel cadastrado?", "quanto pago de internet?", "quais contas vencem dia 5?", "tenho contas atrasadas?", "qual o total das minhas contas fixas?", "liste minhas contas mensais", "minhas contas recorrentes", "meus compromissos financeiros"). Consulta APENAS o módulo Contas Fixas. Se citar uma conta específica ("quando vence meu consórcio?", "quanto falta do aluguel?"), preencha "hint" com o nome citado. Se pedir um recorte ("atrasadas", "vencendo", "pendentes"), preencha "filter".
+- query_installments: parcelamentos ("meus parcelamentos", "quantas parcelas faltam"). Se citar um parcelamento específico ("quanto falta do Fórum?", "quando vence a TV?"), preencha "hint" com o nome citado — deixe vazio para listar todos.
 - query_debts: dívidas ("minhas dívidas", "quanto devo", "estou devendo").
 - query_goals: metas financeiras ("minhas metas", "metas cadastradas").
 - query_habits: hábitos/rotina ("meus hábitos", "minha rotina", "hábitos de hoje").

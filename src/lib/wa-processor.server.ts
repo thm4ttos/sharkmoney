@@ -195,6 +195,19 @@ export function detectPeriodFromTextLocal(t: string): any | null {
   if (/ultim[oa]s?\s+sete\s+dias?/.test(t)) return { range: "last_7_days" };
   if (/ultim[oa]s?\s+trinta\s+dias?/.test(t)) return { range: "last_30_days" };
   if (/\bultimo\s+m(e|ê)s\s+corrido\b|\bm(e|ê)s\s+corrido\b/.test(t)) return { range: "last_30_days" };
+  // "normalmente"/"em média"/"costumo gastar" SEM período explícito: nenhum
+  // dos padrões acima bate ("normalmente" não é uma data), então sem isso a
+  // pergunta caía no padrão de "mês atual" — mas um mês só (ainda em
+  // andamento) não é uma média de verdade. Usa 3 meses FECHADOS (exclui o
+  // mês corrente, que distorceria a média pra baixo por estar incompleto).
+  if (/\bnormalmente\b|\bem\s+m[ée]dia\b|\bcostum[oa]\s+gast|\bm[ée]dia\s+mensal\b|\bm[ée]dia\s+de\s+gast/.test(t)) {
+    const endPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    const startWindow = new Date(endPrevMonth.getFullYear(), endPrevMonth.getMonth() - 2, 1);
+    return {
+      start: fmtDateLocal(startWindow), end: fmtDateLocal(endPrevMonth),
+      label: "Últimos 3 meses (média)", isAverage: true, averageMonths: 3,
+    };
+  }
   const lastMonths = t.match(/ultim[oa]s?\s+(\d{1,2})\s+(mes|meses|m(ê|e)s)/);
   if (lastMonths) {
     const n = Math.max(1, Math.min(24, parseInt(lastMonths[1], 10)));
@@ -263,6 +276,16 @@ const FOLLOW_UP_DETAIL_RE = /\b(especific(a|ar|ou)|detalh(a|e|ar|ou)|discrimin(a
  */
 const EXPLICIT_PERIOD_OVERRIDE_RE = /\b(agora|em\s+vez\s+disso|no\s+lugar)\b/;
 
+/**
+ * Assunto/categoria citado numa pergunta de gasto ("quanto gasto de
+ * combustível", "quanto gasto em média com mercado"). Só serve pra EXTRAIR
+ * a palavra-gatilho aqui (roteador determinístico, síncrono) — quem resolve
+ * pra uma categoria oficial (ou cai no fallback por descrição) é
+ * queryCategoryTotal (brinzap-actions.server.ts), reaproveitando o mesmo
+ * léxico já usado na criação da despesa (KEYWORD_CATEGORY/inferTransactionCategory).
+ */
+const CATEGORY_HINT_RE = /\b(combust[íi]vel|gasolina|etanol|alcool|álcool|posto|abasteci\w*|mercado(?!\s+pago)|supermercado|feira|padaria|restaurante|ifood|lanche|farmacia|farmácia|remedio|remédio|academia|streaming|netflix|spotify|aluguel|condominio|condomínio|internet|uber|estacionamento|pedagio|pedágio|consorcio|consórcio|viagem|lazer|roupa|roupas|educacao|educação|curso|escola|faculdade|assinatura(s)?)\b/i;
+
 export function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; ask?: any } | null): any | null {
   const t = (raw || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   if (!t || t.length < 3) return null;
@@ -327,7 +350,11 @@ export function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; a
 
   // ----- Parcelamentos -----
   if (isQuery && !hasDigitCue && /\b(parcela|parcelas|parcelamento|parcelamentos|parcelad[ao]s?)\b/i.test(t)) {
-    return { kind: "query_installments" };
+    // Tenta capturar um item específico ("quanto falta DO FÓRUM", "quando
+    // vence A TV") em vez de sempre listar tudo — mesmo padrão de query_bills.
+    const hintMatch = t.match(/\b(?:do|da|de)\s+([a-zà-ú][a-zà-ú0-9\s]{1,25}?)(?=\s*[?.!,]|\s+(?:parcela|parcelas|falta|faltam|vence|venc)|$)/i);
+    const hint = hintMatch ? hintMatch[1].trim() : undefined;
+    return { kind: "query_installments", hint };
   }
 
   // ----- Contas fixas / recorrentes -----
@@ -366,6 +393,12 @@ export function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; a
   const period = detectPeriodFromTextLocal(t);
   const anyAsk = ask.wantExpense || ask.wantIncome || ask.wantSummary || ask.wantBalance || ask.wantCategories;
 
+  // Assunto/categoria específico citado na pergunta ("quanto gasto de
+  // combustível", "quanto gasto em média com mercado") — se bater, a
+  // resposta filtra por essa categoria em vez do total geral. Nunca se
+  // aplica quando o pedido já é "por categoria" (isso quer TODAS, não uma só).
+  const categoryHint = !ask.wantCategories ? CATEGORY_HINT_RE.exec(t)?.[0] : undefined;
+
   // Continuação: usuário pede detalhes ("especifica", "detalha", "por categoria"…).
   // Sem período novo e sem "agora"/override → reaproveita último período consultado.
   const isFollowUp = FOLLOW_UP_DETAIL_RE.test(t) || ask.wantCategories;
@@ -377,6 +410,7 @@ export function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; a
       kind: "query_finance_report",
       period: lastCtx.period,
       ask: derived,
+      categoryHint,
       _followUp: true,
     };
   }
@@ -390,6 +424,7 @@ export function detectModuleQueryIntent(raw: string, lastCtx?: { period?: any; a
       kind: "query_finance_report",
       period: period ?? { range: "month" as const },
       ask,
+      categoryHint,
     };
   }
 
@@ -3367,11 +3402,38 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
 
         // Saldo padrão = MÊS ATUAL. Histórico/total apenas se pedido explicitamente.
         case "query_balance": replyText = (await actions.queryBalance(profile.id, inputText || imageCaption || "")).replyText; break;
-        case "query_summary": replyText = (await actions.buildReport(profile.id, { range: intent.range ?? "all", start: (intent as any).range_start, end: (intent as any).range_end, label: (intent as any).range_label })).replyText; break;
+        case "query_summary": {
+          const categoryHint = (intent as any).category_hint;
+          let period: any;
+          if ((intent as any).is_average) {
+            // "normalmente"/"em média": últimos N meses FECHADOS (exclui o mês
+            // atual, ainda incompleto) — mesma janela do roteador determinístico.
+            const nowSp = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+            const months = Math.max(1, Math.min(24, Number((intent as any).average_months) || 3));
+            const endPrevMonth = new Date(nowSp.getFullYear(), nowSp.getMonth(), 0);
+            const startWindow = new Date(endPrevMonth.getFullYear(), endPrevMonth.getMonth() - (months - 1), 1);
+            const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            period = {
+              start: fmt(startWindow), end: fmt(endPrevMonth),
+              label: `Últimos ${months} meses (média)`, isAverage: true, averageMonths: months,
+            };
+          } else {
+            period = { range: intent.range ?? "all", start: (intent as any).range_start, end: (intent as any).range_end, label: (intent as any).range_label };
+          }
+          replyText = categoryHint
+            ? (await actions.queryCategoryTotal(profile.id, categoryHint, period)).replyText
+            : (await actions.buildReport(profile.id, period)).replyText;
+          break;
+        }
         case "query_finance_report": {
           const per = (intent as any).period;
           const askUsed = (intent as any).ask;
-          replyText = (await actions.buildDetailedFinanceReport(profile.id, per, askUsed)).replyText;
+          const categoryHint = (intent as any).categoryHint;
+          if (categoryHint) {
+            replyText = (await actions.queryCategoryTotal(profile.id, categoryHint, per)).replyText;
+          } else {
+            replyText = (await actions.buildDetailedFinanceReport(profile.id, per, askUsed)).replyText;
+          }
           // Memoriza contexto para perguntas de continuação ("especifica", "por categoria"…).
           try {
             await supabaseAdmin.from("wa_contacts").upsert(
@@ -3390,9 +3452,9 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
         }
 
         case "query_appointments": replyText = (await actions.queryAppointments(profile.id)).replyText; break;
-        case "query_bills": replyText = (await actions.queryBills(profile.id, { filter: intent.filter, hint: intent.hint, dueDay: intent.dueDay })).replyText; break;
+        case "query_bills": replyText = (await actions.queryBills(profile.id, { filter: intent.filter, hint: intent.hint, dueDay: intent.dueDay ?? intent.due_day })).replyText; break;
         case "query_installments": {
-          const listRes = await actions.queryInstallments(profile.id);
+          const listRes = await actions.queryInstallments(profile.id, intent.hint);
           replyText = listRes.replyText;
           // Memoriza a lista numerada pra "2 vence dia 15" resolver sozinho.
           if (listRes.items.length > 0) {
