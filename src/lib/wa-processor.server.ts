@@ -1300,9 +1300,18 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
             finalIso = pending.partial_iso;
           }
 
-          // Memória: mantém o título já informado e só complementa se ainda faltar.
+          // Memória: mantém o título já informado, mas aproveita uma
+          // descrição nova se a resposta trouxer uma (ex.: "Buscar aluna,
+          // hoje" depois de "11:30 buscar escola" deve virar "Buscar
+          // aluna", não ficar preso no título da primeira mensagem). Antes
+          // só reaproveitava a resposta quando o título antigo era vago —
+          // um título já razoável nunca podia ser corrigido nesta etapa.
+          // isConfirmationPhrase/titleFromText já filtram respostas que são
+          // só a data/hora ("hoje", "14h", "sim") — titleFromText some com
+          // esses tokens e sobra "" (extra vazio), então o título antigo
+          // continua intacto nesses casos.
           let draftTitle: string = pending.title ?? "";
-          if (isVagueApptTitle(draftTitle) && !isConfirmationPhrase(inputText)) {
+          if (!isConfirmationPhrase(inputText)) {
             const extra = titleFromText(inputText);
             if (extra && !isVagueApptTitle(extra)) draftTitle = extra;
           }
