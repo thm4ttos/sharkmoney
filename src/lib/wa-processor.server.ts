@@ -929,6 +929,18 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       if (rawCtx?.period || rawCtx?.installments_list) lastCtx = rawCtx;
     }
 
+    // ID (da Z-API) da mensagem que o usuário está RESPONDENDO, quando ele
+    // usa o "responder" nativo do WhatsApp — vem como `referenceMessageId`
+    // no payload bruto, no nível raiz (confirmado na doc da Z-API), igual
+    // pra texto ou áudio. Guardado como `row.raw` desde o webhook. Usado
+    // pra resolver com certeza (não só "criado há pouco") a que entidade
+    // uma correção se refere.
+    const replyToRawMessageId: string | null =
+      (row as any)?.raw?.referenceMessageId
+      || (row as any)?.raw?.data?.referenceMessageId
+      || (row as any)?.raw?.message?.referenceMessageId
+      || null;
+
     // ⚠️ Bug real (afeta TODO usuário que corrige um parcelamento/conta e
     // depois manda qualquer outra coisa): "installment_followup"/
     // "bill_followup" são pendências OPCIONAIS — só existem pra aceitar uma
@@ -3462,46 +3474,65 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
               }
             }
           }
-          // "Vai ser quinta-feira, errei" logo depois de criar um compromisso
-          // — sem nenhum outro assunto no meio — é sobre ESSE compromisso,
-          // não uma transação avulsa. Bug real: caía direto em
-          // correctLastTransaction, que só conhece `transactions` e não achava
-          // nada, respondendo "não achei um lançamento recente pra corrigir".
-          // Só intercepta quando a mensagem tem sinal real de data/hora E
-          // existe um compromisso criado nos últimos 30min (janela curta —
-          // "acabei de criar" — nunca resolve contra algo de dias atrás).
+          // "Vai ser quinta-feira, errei" / "Mudar o nome para: X" sobre um
+          // compromisso — nunca uma transação avulsa. Bug real: caía direto
+          // em correctLastTransaction (só conhece `transactions`),
+          // respondendo "não achei um lançamento recente pra corrigir".
+          //
+          // Resolve o alvo em duas camadas:
+          // 1) Se o usuário usou "responder" (reply) do WhatsApp na própria
+          //    mensagem de confirmação, `replyToRawMessageId` aponta com
+          //    CERTEZA pro compromisso — funciona não importa há quanto
+          //    tempo foi criado, e é sempre tentado primeiro.
+          // 2) Sem reply explícito, cai no heurístico de "criado há pouco"
+          //    (últimos 30min) já existente — mais fraco, só cobre o caso
+          //    "acabei de criar, é sobre isso".
           let handledAsAppointment = false;
+          let apptTarget: { id: string; title: string; scheduled_at: string; status?: string | null } | null = null;
+          if (!handledAsBillOrInstallment && replyToRawMessageId) {
+            const { data: repliedTo } = await supabaseAdmin
+              .from("whatsapp_messages")
+              .select("raw")
+              .eq("direction", "out").eq("user_id", profile.id)
+              .eq("raw_message_id", replyToRawMessageId)
+              .maybeSingle();
+            const apptId = (repliedTo as any)?.raw?.appointment_id ?? null;
+            if (apptId) {
+              const apptActions = await import("@/lib/appointment-actions.server");
+              apptTarget = await apptActions.getAppointment(profile.id, apptId);
+            }
+          }
           if (!handledAsBillOrInstallment) {
             const { parseFutureDateTimeSP } = await import("@/lib/appointment-datetime.server");
             const natCorrection = parseFutureDateTimeSP(inputText);
             if (natCorrection.hasDate || natCorrection.hasTime) {
               const apptActions = await import("@/lib/appointment-actions.server");
-              const recentAppt = await apptActions.findRecentlyCreatedAppointment(profile.id);
-              if (recentAppt) {
-                const merged = apptActions.mergeReschedule(recentAppt.scheduled_at, natCorrection) ?? natCorrection.iso;
+              const target = apptTarget ?? await apptActions.findRecentlyCreatedAppointment(profile.id);
+              if (target) {
+                const merged = apptActions.mergeReschedule(target.scheduled_at, natCorrection) ?? natCorrection.iso;
                 if (merged) {
-                  replyText = await apptActions.rescheduleAppointment(profile.id, recentAppt, merged, phone);
+                  replyText = await apptActions.rescheduleAppointment(profile.id, target as any, merged, phone);
                   handledAsAppointment = true;
                 }
               }
             }
           }
-          // "Mudar o nome para: Prova Policia em Alegre" — mesma janela de
-          // "acabei de criar", mas pra NOME em vez de data. Só intercepta
-          // com vocabulário explícito de renomear (nome/título/chamar) pra
-          // não colidir com uma correção de descrição de uma transação
-          // qualquer que só por coincidência de horário caia na mesma janela.
+          // "Mudar o nome para: Prova Policia em Alegre" — sem sinal de
+          // data/hora, mas com vocabulário explícito de renomear (nome/
+          // título/chamar) pra não colidir com uma correção de descrição de
+          // uma transação qualquer que só por coincidência caiba no mesmo
+          // alvo/janela.
           if (!handledAsBillOrInstallment && !handledAsAppointment && /\b(nome|t[íi]tulo|chama(r)?|renome(ar)?)\b/i.test(inputText)) {
             const newTitle = (intent.new_description || "").trim()
               || (inputText.match(/(?:nome|t[íi]tulo)\s*(?:pra|para)?\s*[:\-]?\s*(.+)$/i)?.[1] ?? "").trim();
             if (newTitle.length >= 2) {
               const apptActions = await import("@/lib/appointment-actions.server");
-              const recentAppt = await apptActions.findRecentlyCreatedAppointment(profile.id);
-              if (recentAppt) {
+              const target = apptTarget ?? await apptActions.findRecentlyCreatedAppointment(profile.id);
+              if (target) {
                 await supabaseAdmin.from("appointments")
                   .update({ title: newTitle.slice(0, 140), updated_at: new Date().toISOString() })
-                  .eq("id", recentAppt.id).eq("user_id", profile.id);
-                replyText = `✅ Nome atualizado!\n\n📝 ${newTitle}\n🕒 ${apptActions.prettyAppointmentDate(recentAppt.scheduled_at)}`;
+                  .eq("id", target.id).eq("user_id", profile.id);
+                replyText = `✅ Nome atualizado!\n\n📝 ${newTitle}\n🕒 ${apptActions.prettyAppointmentDate(target.scheduled_at)}`;
                 handledAsAppointment = true;
               }
             }
@@ -3758,7 +3789,18 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
     await supabaseAdmin.from("whatsapp_messages").insert({
       user_id: profile?.id ?? null, phone: replyPhone, direction: "out", media_type: "text",
       content: replyText, status: sendOk ? "sent" : "send_error",
-      raw: { send: sendResult, inbound_message_id: row.id, final_confirmation: true } as any,
+      // raw_message_id (mesma coluna usada pra idempotência de entrada,
+      // aqui reaproveitada pra saída) guarda o ID que a Z-API atribuiu a
+      // ESTA mensagem enviada — é contra esse valor que um
+      // `referenceMessageId` de uma resposta futura do usuário casa.
+      // appointment_id/transaction_id no `raw` deixam claro a que entidade
+      // esta confirmação se refere, pra resolver a correção com certeza.
+      raw_message_id: (sendResult as any)?.response?.messageId ?? (sendResult as any)?.response?.zaapId ?? null,
+      raw: {
+        send: sendResult, inbound_message_id: row.id, final_confirmation: true,
+        appointment_id: savedAppointmentId ?? null,
+        transaction_id: savedTxId ?? null,
+      } as any,
     });
 
     return { ok: sendOk, status: sendOk ? "processed" : "send_error", intent: intent.kind };
