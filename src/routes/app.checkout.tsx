@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { ArrowLeft, CreditCard, QrCode, ShieldCheck, Loader2, CheckCircle2, XCircle, Copy } from "lucide-react";
-import { getPlan, subscriptionPlans, brl, type SubscriptionPlanId } from "@/lib/plans";
+import { getPlan, subscriptionPlans, monthlyEquivalent, savings, brl, type SubscriptionPlanId } from "@/lib/plans";
 import { startCheckout, getMyCheckoutIntent, getAppmaxPublicConfig } from "@/lib/appmax.functions";
 
 const PLAN_IDS_SET = new Set(subscriptionPlans.map((p) => p.id));
@@ -157,7 +157,12 @@ function Page() {
       </button>
 
       <motion.header initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="font-display text-3xl">Assinar {plan.name}</h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="font-display text-3xl">Assinar {plan.name}</h1>
+          <span className="inline-flex items-center rounded-full border border-neon/40 bg-neon/10 px-2.5 py-0.5 text-xs font-semibold" style={{ color: "#39D353" }}>
+            {plan.discountPercentage}% OFF
+          </span>
+        </div>
         <p className="text-sm text-muted-foreground mt-1">{plan.billingLabel} — {plan.accessLabel}</p>
       </motion.header>
 
@@ -171,9 +176,17 @@ function Page() {
       </div>
 
       <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-6 shadow-card space-y-5">
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm text-muted-foreground">Valor</span>
-          <span className="font-display text-2xl">{brl(plan.totalPrice)}</span>
+        <div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm text-muted-foreground">Valor</span>
+            <div className="text-right">
+              <span className="text-xs text-muted-foreground line-through mr-1.5">{brl(plan.originalPrice)}{plan.billing === "one_time" ? "/mês" : ""}</span>
+              <span className="font-display text-2xl">{brl(plan.totalPrice)}</span>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground text-right mt-0.5">
+            {plan.billing === "one_time" ? `${brl(monthlyEquivalent(plan))}/mês equivalente — ` : ""}você economiza {brl(savings(plan))}
+          </p>
         </div>
 
         <div className="flex gap-2">
