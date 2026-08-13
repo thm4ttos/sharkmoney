@@ -1,5 +1,5 @@
 import {
-  Home, User as UserIcon, ArrowLeftRight, Bell, Sparkles, Zap,
+  User as UserIcon, ArrowLeftRight, Bell, Sparkles, Zap,
   Wallet, CalendarDays, Repeat, CreditCard, PiggyBank,
   AlertTriangle, Target, Crown, Heart, Settings2,
   type LucideIcon,
@@ -16,13 +16,12 @@ export const navigationSections: NavSection[] = [
   {
     title: "PRINCIPAL",
     items: [
-      { to: "/app", label: "Início", icon: Home },
       { to: "/app/perfil", label: "Meu Perfil", icon: UserIcon },
+      { to: "/app/casal", label: "Casal", icon: Heart },
       { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },
       { to: "/app/compromissos", label: "Lembretes", icon: Bell },
       { to: "/app/habitos", label: "Rotina & Hábitos", icon: Sparkles },
       { to: "/app/lancar", label: "Lançar rápido", icon: Zap },
-      { to: "/app/sistema", label: "Sistema", icon: Settings2 },
     ],
   },
   {
@@ -35,9 +34,9 @@ export const navigationSections: NavSection[] = [
       { to: "/app/orcamento", label: "Orçamento", icon: PiggyBank },
       { to: "/app/dividas", label: "Dívidas", icon: AlertTriangle },
       { to: "/app/metas", label: "Metas", icon: Target },
-      { to: "/app/casal", label: "Casal", icon: Heart },
       { to: "/app/liberdade", label: "Liberdade Financeira", icon: Crown },
       { to: "/app/salario", label: "Salário", icon: Wallet },
+      { to: "/app/sistema", label: "Sistema", icon: Settings2 },
     ],
   },
 ];

@@ -11,28 +11,27 @@ import { MobileBottomNav } from "@/components/brinzap/MobileBottomNav";
 import { DesktopSidebar } from "@/components/brinzap/DesktopSidebar";
 
 import {
-  LayoutDashboard, Home, Zap, ArrowLeftRight, PiggyBank,
+  LayoutDashboard, Zap, ArrowLeftRight, PiggyBank,
   CreditCard, AlertTriangle, Sparkles, Bell, Wallet, Settings2,
   User as UserIcon, LogOut, Menu, X, CalendarDays, Target, Repeat, Handshake, Heart, type LucideIcon
 } from "lucide-react";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; exact?: boolean };
 const nav: NavItem[] = [
-  { to: "/app/perfil", label: "Meu Perfil", icon: UserIcon },
-  { to: "/app", label: "Início", icon: Home, exact: true },
+  { to: "/app/perfil", label: "Meu Perfil", icon: UserIcon, exact: true },
+  { to: "/app/casal", label: "Casal", icon: Heart },
+  { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },
+  { to: "/app/compromissos", label: "Lembretes", icon: Bell },
+  { to: "/app/habitos", label: "Rotina & Hábitos", icon: Sparkles },
+  { to: "/app/lancar", label: "Lançar Rápido", icon: Zap },
   { to: "/app/dashboard", label: "Central Financeira", icon: LayoutDashboard },
   { to: "/app/calendario", label: "Calendário", icon: CalendarDays },
-  { to: "/app/metas", label: "Metas", icon: Target },
-  { to: "/app/casal", label: "Casal", icon: Heart },
   { to: "/app/contas-fixas", label: "Contas Fixas", icon: Repeat },
-  { to: "/app/lancar", label: "Lançar Rápido", icon: Zap },
-  { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },
-  { to: "/app/orcamento", label: "Orçamento", icon: PiggyBank },
   { to: "/app/parcelados", label: "Compras Parceladas", icon: CreditCard },
+  { to: "/app/orcamento", label: "Orçamento", icon: PiggyBank },
   { to: "/app/dividas", label: "Dívidas", icon: AlertTriangle },
+  { to: "/app/metas", label: "Metas", icon: Target },
   { to: "/app/liberdade", label: "Liberdade Financeira", icon: Sparkles },
-  { to: "/app/habitos", label: "Rotina & Hábitos", icon: Sparkles },
-  { to: "/app/compromissos", label: "Lembretes", icon: Bell },
   { to: "/app/salario", label: "Salário", icon: Wallet },
   { to: "/app/afiliados", label: "Afiliados", icon: Handshake },
   { to: "/app/sistema", label: "Sistema", icon: Settings2 },

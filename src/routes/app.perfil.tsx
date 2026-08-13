@@ -3,29 +3,44 @@ import { logout } from "@/lib/user-session";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  User as UserIcon, Trash2, AlertTriangle, Crown, Clock, CheckCircle2, XCircle,
+  User as UserIcon, Crown, Clock, CheckCircle2, XCircle,
   Mail, Phone, Calendar, KeyRound, LogOut, Download, Bell, MessageCircle,
-  Wallet, TrendingUp, TrendingDown, PiggyBank, ShieldCheck, Bot, BarChart3,
-  Image as ImageIcon, Mic, Layers, Target, ListChecks, Hash, Activity,
-  Sparkles, Globe, Cpu, RefreshCw, Camera, ArrowUpRight, Heart,
+  Wallet, TrendingUp, TrendingDown, PiggyBank, ShieldCheck, BarChart3,
+  Layers, Target, ListChecks, Hash, Globe, RefreshCw, Camera, ArrowUpRight, Heart,
+  ArrowDownRight, Plus, CalendarRange, Sparkles,
 } from "lucide-react";
-import { resetUserHistory } from "@/lib/user-extras.functions";
 import { getMySubscription, getMySubscriptionHistory } from "@/lib/subscriptions.functions";
 import {
   getProfileOverview, updateMyProfile, signOutAllSessions, exportMyData,
 } from "@/lib/profile.functions";
-import { WhatsappConnectionCard } from "@/components/brinzap/WhatsappConnectionCard";
-import { getDashboardStats } from "@/lib/dashboard.functions";
+import { getDashboardStats, type DashboardRange } from "@/lib/dashboard.functions";
+import { listTransactions, sendWelcomeWhatsapp } from "@/lib/brinzap.functions";
+import { formatBRL, categoryGroups, groupOf } from "@/lib/user-mock";
+import { formatDateSP } from "@/lib/datetime";
 import { ClickableKpi, TxListPanel, BalancePanel, useKpiPopover } from "@/components/brinzap/dashboard/KpiPopover";
+import { BalanceBreakdownDialog } from "@/components/brinzap/dashboard/BalanceBreakdownDialog";
+import { UpcomingBillsCard } from "@/components/brinzap/dashboard/UpcomingBillsCard";
 import { AvatarEditor } from "@/components/brinzap/AvatarEditor";
 
 export const Route = createFileRoute("/app/perfil")({
   head: () => ({ meta: [{ title: "Meu Perfil · Abio" }] }),
   component: Page,
 });
+
+const RANGE_OPTIONS: { key: DashboardRange; label: string }[] = [
+  { key: "all", label: "Histórico completo" },
+  { key: "today", label: "Hoje" },
+  { key: "yesterday", label: "Ontem" },
+  { key: "this_week", label: "Esta semana" },
+  { key: "last_7_days", label: "Últimos 7 dias" },
+  { key: "this_month", label: "Este mês" },
+  { key: "last_month", label: "Mês passado" },
+  { key: "this_year", label: "Este ano" },
+  { key: "custom", label: "Personalizado" },
+];
 
 const brl = (n: number) =>
   (Number.isFinite(n) ? n : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -47,9 +62,19 @@ function daysSince(s?: string | null) {
   const diff = Date.now() - new Date(s).getTime();
   return Math.max(0, Math.floor(diff / 86400_000));
 }
+function groupKeyForCategory(category?: string | null) {
+  const raw = String(category ?? "").toLowerCase().trim();
+  if (!raw) return "outros";
+  const found = categoryGroups.find((g) =>
+    g.name.toLowerCase() === raw || g.categories.some((c) => c.toLowerCase() === raw)
+  );
+  return found?.key ?? "outros";
+}
 
 // ============================================================
-// Page
+// Page — "Meu Perfil" (inclui o que antes era a página "Início":
+// resumo financeiro por período, últimos lançamentos, lembretes
+// próximos e atalhos por categoria, tudo na mesma aba).
 // ============================================================
 function Page() {
   const navigate = useNavigate();
@@ -59,7 +84,9 @@ function Page() {
   const updateFn = useServerFn(updateMyProfile);
   const signOutAllFn = useServerFn(signOutAllSessions);
   const exportFn = useServerFn(exportMyData);
-  const runReset = useServerFn(resetUserHistory);
+  const sendWelcome = useServerFn(sendWelcomeWhatsapp);
+  const fetchStats = useServerFn(getDashboardStats);
+  const fetchTransactions = useServerFn(listTransactions);
 
   const { data: overview, isLoading } = useQuery<any>({
     queryKey: ["profile-overview"],
@@ -67,20 +94,86 @@ function Page() {
     refetchInterval: 60_000,
   });
 
-  const runStats = useServerFn(getDashboardStats);
-  const statsQ = useQuery({
-    queryKey: ["dashboard-stats-v2"],
-    queryFn: () => runStats() as any,
-    refetchInterval: 60_000,
-  });
-  const kpiData: any = statsQ.data;
-  const { openCard, toggle, close } = useKpiPopover();
-
   const profile = overview?.profile;
   const finance = overview?.finance;
   const counts = overview?.counts;
-  const ai = overview?.ai;
   const security = overview?.security;
+
+  // Boas-vindas no WhatsApp — dispara uma vez, assim que o telefone é conhecido.
+  const triedWelcome = useRef(false);
+  useEffect(() => {
+    if (triedWelcome.current) return;
+    if (!profile?.phone) return;
+    triedWelcome.current = true;
+    sendWelcome({ data: { phone: profile.phone } }).catch(() => {});
+  }, [profile?.phone, sendWelcome]);
+
+  const { openCard, toggle, close } = useKpiPopover();
+  const [explainOpen, setExplainOpen] = useState(false);
+  const [range, setRange] = useState<DashboardRange>("all");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+
+  const effectiveArgs = useMemo(() => {
+    if (range === "custom" && customStart && customEnd) return { range, start: customStart, end: customEnd };
+    return { range };
+  }, [range, customStart, customEnd]);
+
+  const { data: live } = useQuery({
+    queryKey: ["home-stats", profile?.id, effectiveArgs.range, effectiveArgs.start ?? "", effectiveArgs.end ?? ""],
+    queryFn: () => fetchStats({ data: effectiveArgs }) as any,
+    enabled: !!profile?.id && (range !== "custom" || (!!customStart && !!customEnd)),
+    staleTime: 30_000,
+  });
+
+  // Fonte única de verdade: mesma query usada em /app/transacoes (página 1, sem filtros).
+  const { data: latestTx } = useQuery<{ rows: any[]; total: number }>({
+    queryKey: ["transactions", { q: undefined, kind: undefined, categories: undefined, limit: 5, offset: 0, withCount: true }],
+    queryFn: () => fetchTransactions({ data: { limit: 5, offset: 0, withCount: true } }) as any,
+    enabled: !!profile?.id,
+    staleTime: 15_000,
+  });
+  const latestRows = latestTx?.rows ?? [];
+
+  const homeStats = useMemo(() => {
+    const income = Number(live?.income ?? 0);
+    const expense = Number(live?.expense ?? 0);
+    const top = live?.topCategories?.[0];
+    return {
+      income, expense, balance: income - expense,
+      topGroup: top ? { name: top.category } : null,
+      hasData: (live?.transactionCount ?? 0) > 0 || income > 0 || expense > 0,
+      prevExpense: Number(live?.prevExpense ?? 0),
+      prevIncome: Number(live?.prevIncome ?? 0),
+      appointments: (live?.appointments ?? []) as Array<any>,
+      rangeLabel: (live?.rangeLabel ?? "Histórico completo") as string,
+      hasCompare: Boolean(live?.hasCompare),
+    };
+  }, [live]);
+
+  const comparative = useMemo(() => {
+    if (!homeStats.hasCompare || !homeStats.hasData) return null;
+    if (homeStats.prevExpense > 0 && homeStats.expense < homeStats.prevExpense) {
+      const pct = Math.round(((homeStats.prevExpense - homeStats.expense) / homeStats.prevExpense) * 100);
+      return `🚀 Você gastou ${pct}% menos que no período anterior. Continue assim!`;
+    }
+    if (homeStats.prevExpense > 0 && homeStats.expense > homeStats.prevExpense) {
+      const pct = Math.round(((homeStats.expense - homeStats.prevExpense) / homeStats.prevExpense) * 100);
+      return `⚠️ Suas despesas subiram ${pct}% em relação ao período anterior.`;
+    }
+    if (homeStats.prevIncome > 0 && homeStats.income > homeStats.prevIncome) {
+      const pct = Math.round(((homeStats.income - homeStats.prevIncome) / homeStats.prevIncome) * 100);
+      return `📈 Sua receita aumentou ${pct}% em relação ao período anterior.`;
+    }
+    return null;
+  }, [homeStats]);
+
+  const motivational = useMemo(() => {
+    if (!homeStats.hasData) return "💡 Dica: envie fotos de comprovantes pelo WhatsApp para registrar gastos automaticamente.";
+    if (comparative) return comparative;
+    if (homeStats.balance > 0) return `💰 Seu saldo está positivo em ${formatBRL(homeStats.balance)}. Bom trabalho!`;
+    return "💡 Envie mensagens no WhatsApp para registrar suas movimentações sem esforço.";
+  }, [homeStats, comparative]);
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -114,7 +207,6 @@ function Page() {
     window.dispatchEvent(new CustomEvent("abio:profile-updated"));
   };
 
-
   const memberSince = useMemo(() => fmtDate(profile?.created_at), [profile]);
   const lastAccess = useMemo(() => fmtDateTime(profile?.last_seen_at ?? profile?.updated_at), [profile]);
   const accountAgeDays = useMemo(() => daysSince(profile?.created_at), [profile]);
@@ -123,13 +215,6 @@ function Page() {
     if (profile.email) return String(profile.email).split("@")[0];
     return (profile.name ?? "").toLowerCase().replace(/\s+/g, ".") || "—";
   }, [profile]);
-
-  // ===== Confirm reset =====
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmText, setConfirmText] = useState("");
-  const [resetting, setResetting] = useState(false);
-  const [resetResult, setResetResult] = useState<Record<string, number> | null>(null);
-  const [resetError, setResetError] = useState<string | null>(null);
 
   // ===== Password change =====
   const [pwOpen, setPwOpen] = useState(false);
@@ -229,21 +314,6 @@ function Page() {
     }
   };
 
-  const doReset = async () => {
-    setResetting(true); setResetError(null);
-    try {
-      const r: any = await runReset({ data: { confirm: confirmText } });
-      setResetResult(r.removed);
-      setConfirmOpen(false); setConfirmText("");
-      qc.invalidateQueries();
-      qc.refetchQueries({ type: "active" });
-    } catch (e: any) {
-      setResetError(e?.message ?? "Falha ao zerar histórico.");
-    } finally {
-      setResetting(false);
-    }
-  };
-
   if (isLoading || !profile) return <Skeleton />;
 
   const statusBadge =
@@ -252,8 +322,9 @@ function Page() {
       : { label: "Ativa", cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300", Icon: CheckCircle2 };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-6xl mx-auto">
       <AvatarEditor open={avatarOpen} onOpenChange={setAvatarOpen} currentUrl={profile.avatar_url} onSave={saveAvatar} />
+
       {/* ===== HERO HEADER ===== */}
       <motion.header
         initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
@@ -299,11 +370,18 @@ function Page() {
               <p className="flex items-center gap-1.5"><Calendar className="h-3 w-3" /> Cadastro: <b className="text-foreground">{memberSince}</b> ({accountAgeDays}d)</p>
               <p className="flex items-center gap-1.5"><Clock className="h-3 w-3" /> Último acesso: <b className="text-foreground">{lastAccess}</b></p>
             </div>
+            <p className="text-sm mt-3 text-primary/90 leading-relaxed max-w-xl">{motivational}</p>
           </div>
           <div className="flex flex-row md:flex-col gap-2 self-start md:self-center">
+            <Link
+              to="/app/lancar"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-brand text-primary-foreground px-4 py-2 text-sm font-medium glow-neon hover:opacity-90"
+            >
+              <Plus className="h-3.5 w-3.5" /> Lançar rápido
+            </Link>
             <button
               onClick={() => setEditing(true)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-brand text-primary-foreground px-4 py-2 text-sm font-medium glow-neon hover:opacity-90"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background/40 px-4 py-2 text-sm hover:bg-background/60"
             >
               <UserIcon className="h-3.5 w-3.5" /> Editar perfil
             </button>
@@ -317,21 +395,160 @@ function Page() {
         </div>
       </motion.header>
 
-      {/* ===== FINANCIAL KPIs ===== */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <ClickableKpi open={openCard === "balance"} onToggle={() => toggle("balance")} onClose={close} panel={<BalancePanel d={kpiData} onClose={close} />}>
-          <KPI delay={0.05} icon={Wallet} label="Saldo atual" value={brl(finance?.balance ?? 0)} tone={(finance?.balance ?? 0) < 0 ? "danger" : "primary"} />
-        </ClickableKpi>
-        <ClickableKpi open={openCard === "income"} onToggle={() => toggle("income")} onClose={close} panel={<TxListPanel title="💰 Últimas receitas" kind="income" items={kpiData?.recentIncome ?? []} onClose={close} />}>
-          <KPI delay={0.1} icon={TrendingUp} label="Receitas totais" value={brl(finance?.incomeMonth ?? 0)} tone="success" />
-        </ClickableKpi>
-        <ClickableKpi open={openCard === "expense"} onToggle={() => toggle("expense")} onClose={close} panel={<TxListPanel title="💸 Últimas despesas" kind="expense" items={kpiData?.recentExpense ?? []} onClose={close} />}>
-          <KPI delay={0.15} icon={TrendingDown} label="Despesas totais" value={brl(finance?.expenseMonth ?? 0)} tone="danger" />
-        </ClickableKpi>
-        <KPI delay={0.2} icon={PiggyBank} label="Economia total" value={brl(finance?.savedMonth ?? 0)} tone={(finance?.savedMonth ?? 0) < 0 ? "danger" : "primary"} sub={`${counts?.transactions ?? 0} lançamentos no total`} />
+      {/* ===== PERÍODO ===== */}
+      <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-4">
+        <div className="flex items-center gap-2 mb-3 text-xs uppercase tracking-[0.2em] text-primary">
+          <CalendarRange className="h-3.5 w-3.5" /> Período
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {RANGE_OPTIONS.map((opt) => {
+            const active = range === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => setRange(opt.key)}
+                className={[
+                  "px-3 py-1.5 rounded-xl text-xs border transition-smooth",
+                  active
+                    ? "border-primary/50 bg-primary/15 text-primary"
+                    : "border-border bg-background/40 text-muted-foreground hover:text-foreground hover:border-primary/30",
+                ].join(" ")}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        {range === "custom" && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            <label className="text-muted-foreground">De</label>
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="px-2 py-1.5 rounded-xl border border-border bg-background/40 text-foreground"
+            />
+            <label className="text-muted-foreground">até</label>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="px-2 py-1.5 rounded-xl border border-border bg-background/40 text-foreground"
+            />
+          </div>
+        )}
       </section>
 
-      {/* WhatsApp e Configurações da IA removidos da visão do usuário — disponíveis apenas no admin */}
+      <BalanceBreakdownDialog
+        open={explainOpen}
+        onClose={() => setExplainOpen(false)}
+        from={range === "custom" && customStart ? customStart : undefined}
+        to={range === "custom" && customEnd ? customEnd : undefined}
+        periodLabel={homeStats.rangeLabel}
+      />
+
+      {/* ===== KPIs DO PERÍODO ===== */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <ClickableKpi open={openCard === "balance"} onToggle={() => toggle("balance")} onClose={close} panel={<BalancePanel d={live} onClose={close} onExplain={() => setExplainOpen(true)} />}>
+          <BigCard label="Saldo" value={formatBRL(homeStats.balance)} accent="bg-gradient-brand-soft border-primary/30" icon={Sparkles} />
+        </ClickableKpi>
+        <ClickableKpi open={openCard === "income"} onToggle={() => toggle("income")} onClose={close} panel={<TxListPanel title="💰 Últimas receitas" kind="income" items={(live as any)?.recentIncome ?? []} onClose={close} />}>
+          <BigCard label="Receitas" value={formatBRL(homeStats.income)} accent="bg-emerald-500/10 border-emerald-500/30" icon={ArrowUpRight} subtle="text-emerald-300" />
+        </ClickableKpi>
+        <ClickableKpi open={openCard === "expense"} onToggle={() => toggle("expense")} onClose={close} panel={<TxListPanel title="💸 Últimas despesas" kind="expense" items={(live as any)?.recentExpense ?? []} onClose={close} />}>
+          <BigCard label="Despesas" value={formatBRL(homeStats.expense)} accent="bg-rose-500/10 border-rose-500/30" icon={ArrowDownRight} subtle="text-rose-300" />
+        </ClickableKpi>
+      </div>
+
+      {/* ===== ÚLTIMOS LANÇAMENTOS + PRÓXIMOS LEMBRETES ===== */}
+      <div className="grid lg:grid-cols-[1.4fr_1fr] gap-4">
+        <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5 hover:border-primary/40 transition-smooth">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-xl">Últimos lançamentos</h2>
+            {latestRows.length > 0 && (
+              <Link to="/app/transacoes" search={{ kind: undefined, view: "lista" }} className="text-xs text-primary hover:underline">Ver todos</Link>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Mesma fonte de dados da aba Transações.</p>
+          {latestRows.length === 0 ? (
+            <div className="mt-6 rounded-2xl border border-dashed border-border bg-background/30 p-6 text-center">
+              <p className="text-sm text-muted-foreground">Nenhum lançamento registrado ainda.</p>
+              <p className="text-xs text-muted-foreground mt-1">Envie uma mensagem pelo WhatsApp para começar.</p>
+            </div>
+          ) : (
+            <div className="mt-4 divide-y divide-border">
+              {latestRows.slice(0, 5).map((t: any) => {
+                const g = groupOf(groupKeyForCategory(t.category));
+                const Icon = g.icon;
+                const occurredAt = String(t.occurred_at ?? "");
+                const isIncome = t.kind === "income";
+                return (
+                  <div key={t.id} className="flex items-center gap-3 py-3 text-sm">
+                    <div className={`h-9 w-9 grid place-items-center rounded-xl bg-background/50 ${g.color}`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate font-medium">{t.description || t.category || "Lançamento"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t.category}{occurredAt ? ` · ${formatDateSP(occurredAt)}` : ""}
+                      </p>
+                    </div>
+                    <p className={`font-medium ${isIncome ? "text-emerald-400" : "text-rose-400"}`}>
+                      {isIncome ? "+" : "-"} {formatBRL(Number(t.amount ?? 0))}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {homeStats.appointments.length > 0 ? (
+          <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5 hover:border-primary/40 transition-smooth">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-xl">Próximos lembretes</h2>
+              <Link to="/app/compromissos" className="text-xs text-primary hover:underline">Ver todos</Link>
+            </div>
+            <div className="mt-4 space-y-3">
+              {homeStats.appointments.slice(0, 4).map((a: any) => {
+                const when = new Date(a.scheduled_at);
+                return (
+                  <div key={a.id} className="flex items-center gap-3 rounded-2xl border border-border bg-background/40 p-3 hover:border-primary/30 transition-smooth">
+                    <div className="h-10 w-10 grid place-items-center rounded-xl bg-primary/10 text-primary">
+                      <MessageCircle className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm truncate">{a.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {when.toLocaleDateString("pt-BR")} · {when.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : (
+          <UpcomingBillsCard />
+        )}
+      </div>
+
+      {/* ===== ATALHOS POR CATEGORIA ===== */}
+      <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5">
+        <h2 className="font-display text-xl">Atalhos por categoria</h2>
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {categoryGroups.slice(0, 12).map((g) => {
+            const Icon = g.icon;
+            return (
+              <Link key={g.key} to="/app/transacoes" search={{ kind: undefined, view: "categorias" }} className="rounded-2xl border border-border bg-background/40 p-4 hover:border-primary/40 hover:scale-[1.02] transition-smooth group">
+                <div className={`${g.color}`}><Icon className="h-5 w-5" /></div>
+                <p className="text-sm mt-3 group-hover:text-primary transition-smooth">{g.name}</p>
+                <p className="text-[11px] text-muted-foreground">{g.categories.length} categorias</p>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
       {/* ===== SUBSCRIPTION ===== */}
       <SubscriptionCard />
@@ -415,7 +632,6 @@ function Page() {
               className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm opacity-70" />
           </Field>
         </div>
-
 
         {editing && (
           <div className="flex gap-2 flex-wrap mt-4">
@@ -509,7 +725,7 @@ function Page() {
 }
 
 // ============================================================
-// Subscription cards (kept)
+// Subscription cards
 // ============================================================
 function SubscriptionCard() {
   const fetchSub = useServerFn(getMySubscription);
@@ -651,29 +867,23 @@ function Card({
   );
 }
 
-function KPI({ icon: Icon, label, value, tone = "primary", sub, delay = 0 }: {
-  icon: any; label: string; value: string; tone?: "primary" | "success" | "danger"; sub?: string; delay?: number;
-}) {
-  const toneCls =
-    tone === "success" ? "text-emerald-300 border-emerald-500/30 bg-emerald-500/5" :
-    tone === "danger" ? "text-destructive border-destructive/30 bg-destructive/5" :
-    "text-primary border-border bg-card/60";
+function BigCard({ label, value, accent, icon: Icon, subtle }: { label: string; value: string; accent: string; icon: typeof Sparkles; subtle?: string }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.4 }}
-      className={`relative isolate overflow-hidden rounded-2xl border p-3 backdrop-blur-xl ${toneCls}`}
+      whileHover={{ y: -3 }}
+      className={`relative isolate w-full overflow-hidden rounded-3xl border p-5 max-[380px]:p-4 backdrop-blur-xl transition-smooth hover:shadow-lg ${accent}`}
     >
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" /> {label}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span className="truncate">{label}</span>
+        <Icon className={`h-4 w-4 shrink-0 ${subtle ?? "text-primary"}`} />
       </div>
       <p
         key={value}
-        className="text-lg font-display mt-1 truncate tabular-nums whitespace-nowrap"
-        style={{ willChange: "auto", backfaceVisibility: "hidden" }}
+        className="font-display mt-2 tabular-nums whitespace-nowrap truncate"
+        style={{ willChange: "auto", backfaceVisibility: "hidden", fontSize: "clamp(1.5rem, 7vw, 1.875rem)" }}
       >
         {value}
       </p>
-      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
     </motion.div>
   );
 }
@@ -744,8 +954,12 @@ function ToggleRow({ label, description, checked, onChange }: {
 
 function Skeleton() {
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="h-36 rounded-3xl bg-card/40 animate-pulse" />
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="h-44 rounded-3xl bg-card/40 animate-pulse" />
+      <div className="h-24 rounded-3xl bg-card/40 animate-pulse" />
+      <div className="grid md:grid-cols-3 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-28 rounded-3xl bg-card/40 animate-pulse" />)}
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-20 rounded-2xl bg-card/40 animate-pulse" />)}
       </div>
