@@ -1,9 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { CreditCard, QrCode, ShieldCheck, Loader2, CheckCircle2, XCircle, Copy } from "lucide-react";
+import { ArrowLeft, CreditCard, QrCode, ShieldCheck, Loader2, CheckCircle2, XCircle, Copy } from "lucide-react";
 import { getPlan, subscriptionPlans, brl, type SubscriptionPlanId } from "@/lib/plans";
 import { startCheckout, getMyCheckoutIntent, getAppmaxPublicConfig } from "@/lib/appmax.functions";
 
@@ -30,6 +30,7 @@ function appmaxField(name: "number" | "holder_name" | "expiration_month" | "expi
 
 function Page() {
   const { plan: planSlug } = Route.useSearch();
+  const navigate = useNavigate();
   const plan = getPlan(planSlug) ?? subscriptionPlans[0];
 
   const [method, setMethod] = useState<"credit_card" | "pix">("credit_card");
@@ -42,6 +43,14 @@ function Page() {
   const [result, setResult] = useState<{ status: "completed" | "failed" | "pending"; reason?: string } | null>(null);
   const [pix, setPix] = useState<{ qr: string | null; emv: string | null; intentId: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+
+  // Trocar de plano no meio do fluxo cancela qualquer Pix pendente/erro em
+  // exibição — evita mostrar um QR code ou erro que já não é do plano atual.
+  useEffect(() => {
+    setPix(null);
+    setResult(null);
+    setError("");
+  }, [planSlug]);
 
   const runConfig = useServerFn(getAppmaxPublicConfig);
   const runCheckout = useServerFn(startCheckout);
@@ -142,10 +151,24 @@ function Page() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
+      <button onClick={() => navigate({ to: "/app/perfil" })}
+        className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition-smooth">
+        <ArrowLeft className="h-4 w-4" /> Voltar
+      </button>
+
       <motion.header initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-display text-3xl">Assinar {plan.name}</h1>
         <p className="text-sm text-muted-foreground mt-1">{plan.billingLabel} — {plan.accessLabel}</p>
       </motion.header>
+
+      <div className="flex gap-2">
+        {subscriptionPlans.map((p) => (
+          <Link key={p.id} to="/app/checkout" search={{ plan: p.id }}
+            className={`flex-1 rounded-xl border px-3 py-2.5 text-sm text-center transition-smooth ${p.id === plan.id ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-background/40"}`}>
+            {p.name.replace("Plano ", "")}
+          </Link>
+        ))}
+      </div>
 
       <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-6 shadow-card space-y-5">
         <div className="flex items-baseline justify-between">
