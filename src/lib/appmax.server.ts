@@ -146,8 +146,9 @@ export async function authorizeAppmaxInstall(callbackUrl: string): Promise<{ has
   let json: any = null;
   try { json = text ? JSON.parse(text) : null; } catch { /* ignore */ }
   if (!res.ok) throw new Error(`Appmax /app/authorize falhou (${res.status}): ${text.slice(0, 300)}`);
-  const hash = json?.hash ?? json?.data?.hash ?? json?.authorization_hash ?? null;
-  if (!hash) throw new Error(`Resposta sem campo "hash" reconhecido: ${text.slice(0, 500)}`);
+  // Confirmado em produção: o campo real é `data.token`, não `hash`.
+  const hash = json?.data?.token ?? json?.token ?? json?.hash ?? json?.data?.hash ?? json?.authorization_hash ?? null;
+  if (!hash) throw new Error(`Resposta sem campo "token"/"hash" reconhecido: ${text.slice(0, 500)}`);
   return { hash, redirectUrl: `${installBase(creds.environment)}/appstore/integration/${hash}`, raw: json };
 }
 
@@ -162,7 +163,10 @@ export async function generateAppmaxMerchantCreds(hash: string): Promise<{ clien
   const res = await fetch(`${apiBase(creds.environment)}/app/client/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ hash }),
+    // Envia sob os dois nomes possíveis (a Appmax chamou o campo de retorno
+    // do /app/authorize de "token", não "hash" — o nome esperado aqui pode
+    // seguir o mesmo padrão; campos extras desconhecidos costumam ser ignorados).
+    body: JSON.stringify({ hash, token: hash }),
   });
   const text = await res.text();
   let json: any = null;
