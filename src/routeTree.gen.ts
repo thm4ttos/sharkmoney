@@ -35,6 +35,7 @@ import { Route as AppDebugPerfilRouteImport } from './routes/app.debug-perfil'
 import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
 import { Route as AppContasFixasRouteImport } from './routes/app.contas-fixas'
 import { Route as AppCompromissosRouteImport } from './routes/app.compromissos'
+import { Route as AppCheckoutRouteImport } from './routes/app.checkout'
 import { Route as AppCasalDashboardRouteImport } from './routes/app.casal-dashboard'
 import { Route as AppCasalRouteImport } from './routes/app.casal'
 import { Route as AppCalendarioRouteImport } from './routes/app.calendario'
@@ -43,6 +44,7 @@ import { Route as AdminWhatsappRouteImport } from './routes/admin.whatsapp'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminSistemaRouteImport } from './routes/admin.sistema'
 import { Route as AdminPendingMessagesRouteImport } from './routes/admin.pending-messages'
+import { Route as AdminPagamentosRouteImport } from './routes/admin.pagamentos'
 import { Route as AdminOnboardingRouteImport } from './routes/admin.onboarding'
 import { Route as AdminMetricasRouteImport } from './routes/admin.metricas'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
@@ -66,6 +68,8 @@ import { Route as ApiPublicHooksInstallmentRemindersRouteImport } from './routes
 import { Route as ApiPublicHooksBillRemindersRouteImport } from './routes/api/public/hooks/bill-reminders'
 import { Route as ApiPublicHooksBillPaymentCheckRouteImport } from './routes/api/public/hooks/bill-payment-check'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
+import { Route as ApiPublicHooksAppmaxWebhookRouteImport } from './routes/api/public/hooks/appmax-webhook'
+import { Route as ApiPublicHooksAppmaxHealthRouteImport } from './routes/api/public/hooks/appmax-health'
 import { Route as ApiPublicAffiliateTrackRouteImport } from './routes/api/public/affiliate/track'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -198,6 +202,11 @@ const AppCompromissosRoute = AppCompromissosRouteImport.update({
   path: '/compromissos',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCheckoutRoute = AppCheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCasalDashboardRoute = AppCasalDashboardRouteImport.update({
   id: '/casal-dashboard',
   path: '/casal-dashboard',
@@ -236,6 +245,11 @@ const AdminSistemaRoute = AdminSistemaRouteImport.update({
 const AdminPendingMessagesRoute = AdminPendingMessagesRouteImport.update({
   id: '/pending-messages',
   path: '/pending-messages',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPagamentosRoute = AdminPagamentosRouteImport.update({
+  id: '/pagamentos',
+  path: '/pagamentos',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminOnboardingRoute = AdminOnboardingRouteImport.update({
@@ -361,6 +375,18 @@ const ApiPublicHooksAppointmentRemindersRoute =
     path: '/api/public/hooks/appointment-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksAppmaxWebhookRoute =
+  ApiPublicHooksAppmaxWebhookRouteImport.update({
+    id: '/api/public/hooks/appmax-webhook',
+    path: '/api/public/hooks/appmax-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksAppmaxHealthRoute =
+  ApiPublicHooksAppmaxHealthRouteImport.update({
+    id: '/api/public/hooks/appmax-health',
+    path: '/api/public/hooks/appmax-health',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicAffiliateTrackRoute = ApiPublicAffiliateTrackRouteImport.update({
   id: '/api/public/affiliate/track',
   path: '/api/public/affiliate/track',
@@ -386,6 +412,7 @@ export interface FileRoutesByFullPath {
   '/admin/login': typeof AdminLoginRoute
   '/admin/metricas': typeof AdminMetricasRoute
   '/admin/onboarding': typeof AdminOnboardingRoute
+  '/admin/pagamentos': typeof AdminPagamentosRoute
   '/admin/pending-messages': typeof AdminPendingMessagesRoute
   '/admin/sistema': typeof AdminSistemaRoute
   '/admin/users': typeof AdminUsersRouteWithChildren
@@ -394,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
+  '/app/checkout': typeof AppCheckoutRoute
   '/app/compromissos': typeof AppCompromissosRoute
   '/app/contas-fixas': typeof AppContasFixasRoute
   '/app/dashboard': typeof AppDashboardRoute
@@ -417,6 +445,8 @@ export interface FileRoutesByFullPath {
   '/api/public/whatsapp': typeof ApiPublicWhatsappRoute
   '/api/public/zapi-setup': typeof ApiPublicZapiSetupRoute
   '/api/public/affiliate/track': typeof ApiPublicAffiliateTrackRoute
+  '/api/public/hooks/appmax-health': typeof ApiPublicHooksAppmaxHealthRoute
+  '/api/public/hooks/appmax-webhook': typeof ApiPublicHooksAppmaxWebhookRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/bill-payment-check': typeof ApiPublicHooksBillPaymentCheckRoute
   '/api/public/hooks/bill-reminders': typeof ApiPublicHooksBillRemindersRoute
@@ -444,6 +474,7 @@ export interface FileRoutesByTo {
   '/admin/login': typeof AdminLoginRoute
   '/admin/metricas': typeof AdminMetricasRoute
   '/admin/onboarding': typeof AdminOnboardingRoute
+  '/admin/pagamentos': typeof AdminPagamentosRoute
   '/admin/pending-messages': typeof AdminPendingMessagesRoute
   '/admin/sistema': typeof AdminSistemaRoute
   '/admin/users': typeof AdminUsersRouteWithChildren
@@ -452,6 +483,7 @@ export interface FileRoutesByTo {
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
+  '/app/checkout': typeof AppCheckoutRoute
   '/app/compromissos': typeof AppCompromissosRoute
   '/app/contas-fixas': typeof AppContasFixasRoute
   '/app/dashboard': typeof AppDashboardRoute
@@ -475,6 +507,8 @@ export interface FileRoutesByTo {
   '/api/public/whatsapp': typeof ApiPublicWhatsappRoute
   '/api/public/zapi-setup': typeof ApiPublicZapiSetupRoute
   '/api/public/affiliate/track': typeof ApiPublicAffiliateTrackRoute
+  '/api/public/hooks/appmax-health': typeof ApiPublicHooksAppmaxHealthRoute
+  '/api/public/hooks/appmax-webhook': typeof ApiPublicHooksAppmaxWebhookRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/bill-payment-check': typeof ApiPublicHooksBillPaymentCheckRoute
   '/api/public/hooks/bill-reminders': typeof ApiPublicHooksBillRemindersRoute
@@ -505,6 +539,7 @@ export interface FileRoutesById {
   '/admin/login': typeof AdminLoginRoute
   '/admin/metricas': typeof AdminMetricasRoute
   '/admin/onboarding': typeof AdminOnboardingRoute
+  '/admin/pagamentos': typeof AdminPagamentosRoute
   '/admin/pending-messages': typeof AdminPendingMessagesRoute
   '/admin/sistema': typeof AdminSistemaRoute
   '/admin/users': typeof AdminUsersRouteWithChildren
@@ -513,6 +548,7 @@ export interface FileRoutesById {
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
+  '/app/checkout': typeof AppCheckoutRoute
   '/app/compromissos': typeof AppCompromissosRoute
   '/app/contas-fixas': typeof AppContasFixasRoute
   '/app/dashboard': typeof AppDashboardRoute
@@ -536,6 +572,8 @@ export interface FileRoutesById {
   '/api/public/whatsapp': typeof ApiPublicWhatsappRoute
   '/api/public/zapi-setup': typeof ApiPublicZapiSetupRoute
   '/api/public/affiliate/track': typeof ApiPublicAffiliateTrackRoute
+  '/api/public/hooks/appmax-health': typeof ApiPublicHooksAppmaxHealthRoute
+  '/api/public/hooks/appmax-webhook': typeof ApiPublicHooksAppmaxWebhookRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/bill-payment-check': typeof ApiPublicHooksBillPaymentCheckRoute
   '/api/public/hooks/bill-reminders': typeof ApiPublicHooksBillRemindersRoute
@@ -567,6 +605,7 @@ export interface FileRouteTypes {
     | '/admin/login'
     | '/admin/metricas'
     | '/admin/onboarding'
+    | '/admin/pagamentos'
     | '/admin/pending-messages'
     | '/admin/sistema'
     | '/admin/users'
@@ -575,6 +614,7 @@ export interface FileRouteTypes {
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
+    | '/app/checkout'
     | '/app/compromissos'
     | '/app/contas-fixas'
     | '/app/dashboard'
@@ -598,6 +638,8 @@ export interface FileRouteTypes {
     | '/api/public/whatsapp'
     | '/api/public/zapi-setup'
     | '/api/public/affiliate/track'
+    | '/api/public/hooks/appmax-health'
+    | '/api/public/hooks/appmax-webhook'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/bill-payment-check'
     | '/api/public/hooks/bill-reminders'
@@ -625,6 +667,7 @@ export interface FileRouteTypes {
     | '/admin/login'
     | '/admin/metricas'
     | '/admin/onboarding'
+    | '/admin/pagamentos'
     | '/admin/pending-messages'
     | '/admin/sistema'
     | '/admin/users'
@@ -633,6 +676,7 @@ export interface FileRouteTypes {
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
+    | '/app/checkout'
     | '/app/compromissos'
     | '/app/contas-fixas'
     | '/app/dashboard'
@@ -656,6 +700,8 @@ export interface FileRouteTypes {
     | '/api/public/whatsapp'
     | '/api/public/zapi-setup'
     | '/api/public/affiliate/track'
+    | '/api/public/hooks/appmax-health'
+    | '/api/public/hooks/appmax-webhook'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/bill-payment-check'
     | '/api/public/hooks/bill-reminders'
@@ -685,6 +731,7 @@ export interface FileRouteTypes {
     | '/admin/login'
     | '/admin/metricas'
     | '/admin/onboarding'
+    | '/admin/pagamentos'
     | '/admin/pending-messages'
     | '/admin/sistema'
     | '/admin/users'
@@ -693,6 +740,7 @@ export interface FileRouteTypes {
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
+    | '/app/checkout'
     | '/app/compromissos'
     | '/app/contas-fixas'
     | '/app/dashboard'
@@ -716,6 +764,8 @@ export interface FileRouteTypes {
     | '/api/public/whatsapp'
     | '/api/public/zapi-setup'
     | '/api/public/affiliate/track'
+    | '/api/public/hooks/appmax-health'
+    | '/api/public/hooks/appmax-webhook'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/bill-payment-check'
     | '/api/public/hooks/bill-reminders'
@@ -740,6 +790,8 @@ export interface RootRouteChildren {
   ApiPublicWhatsappRoute: typeof ApiPublicWhatsappRoute
   ApiPublicZapiSetupRoute: typeof ApiPublicZapiSetupRoute
   ApiPublicAffiliateTrackRoute: typeof ApiPublicAffiliateTrackRoute
+  ApiPublicHooksAppmaxHealthRoute: typeof ApiPublicHooksAppmaxHealthRoute
+  ApiPublicHooksAppmaxWebhookRoute: typeof ApiPublicHooksAppmaxWebhookRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksBillPaymentCheckRoute: typeof ApiPublicHooksBillPaymentCheckRoute
   ApiPublicHooksBillRemindersRoute: typeof ApiPublicHooksBillRemindersRoute
@@ -935,6 +987,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCompromissosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/checkout': {
+      id: '/app/checkout'
+      path: '/checkout'
+      fullPath: '/app/checkout'
+      preLoaderRoute: typeof AppCheckoutRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/casal-dashboard': {
       id: '/app/casal-dashboard'
       path: '/casal-dashboard'
@@ -989,6 +1048,13 @@ declare module '@tanstack/react-router' {
       path: '/pending-messages'
       fullPath: '/admin/pending-messages'
       preLoaderRoute: typeof AdminPendingMessagesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/pagamentos': {
+      id: '/admin/pagamentos'
+      path: '/pagamentos'
+      fullPath: '/admin/pagamentos'
+      preLoaderRoute: typeof AdminPagamentosRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/onboarding': {
@@ -1152,6 +1218,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksAppointmentRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/appmax-webhook': {
+      id: '/api/public/hooks/appmax-webhook'
+      path: '/api/public/hooks/appmax-webhook'
+      fullPath: '/api/public/hooks/appmax-webhook'
+      preLoaderRoute: typeof ApiPublicHooksAppmaxWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/appmax-health': {
+      id: '/api/public/hooks/appmax-health'
+      path: '/api/public/hooks/appmax-health'
+      fullPath: '/api/public/hooks/appmax-health'
+      preLoaderRoute: typeof ApiPublicHooksAppmaxHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/affiliate/track': {
       id: '/api/public/affiliate/track'
       path: '/api/public/affiliate/track'
@@ -1185,6 +1265,7 @@ interface AdminRouteChildren {
   AdminLoginRoute: typeof AdminLoginRoute
   AdminMetricasRoute: typeof AdminMetricasRoute
   AdminOnboardingRoute: typeof AdminOnboardingRoute
+  AdminPagamentosRoute: typeof AdminPagamentosRoute
   AdminPendingMessagesRoute: typeof AdminPendingMessagesRoute
   AdminSistemaRoute: typeof AdminSistemaRoute
   AdminUsersRoute: typeof AdminUsersRouteWithChildren
@@ -1203,6 +1284,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminLoginRoute: AdminLoginRoute,
   AdminMetricasRoute: AdminMetricasRoute,
   AdminOnboardingRoute: AdminOnboardingRoute,
+  AdminPagamentosRoute: AdminPagamentosRoute,
   AdminPendingMessagesRoute: AdminPendingMessagesRoute,
   AdminSistemaRoute: AdminSistemaRoute,
   AdminUsersRoute: AdminUsersRouteWithChildren,
@@ -1217,6 +1299,7 @@ interface AppRouteChildren {
   AppCalendarioRoute: typeof AppCalendarioRoute
   AppCasalRoute: typeof AppCasalRoute
   AppCasalDashboardRoute: typeof AppCasalDashboardRoute
+  AppCheckoutRoute: typeof AppCheckoutRoute
   AppCompromissosRoute: typeof AppCompromissosRoute
   AppContasFixasRoute: typeof AppContasFixasRoute
   AppDashboardRoute: typeof AppDashboardRoute
@@ -1241,6 +1324,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCalendarioRoute: AppCalendarioRoute,
   AppCasalRoute: AppCasalRoute,
   AppCasalDashboardRoute: AppCasalDashboardRoute,
+  AppCheckoutRoute: AppCheckoutRoute,
   AppCompromissosRoute: AppCompromissosRoute,
   AppContasFixasRoute: AppContasFixasRoute,
   AppDashboardRoute: AppDashboardRoute,
@@ -1275,6 +1359,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicWhatsappRoute: ApiPublicWhatsappRoute,
   ApiPublicZapiSetupRoute: ApiPublicZapiSetupRoute,
   ApiPublicAffiliateTrackRoute: ApiPublicAffiliateTrackRoute,
+  ApiPublicHooksAppmaxHealthRoute: ApiPublicHooksAppmaxHealthRoute,
+  ApiPublicHooksAppmaxWebhookRoute: ApiPublicHooksAppmaxWebhookRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,
   ApiPublicHooksBillPaymentCheckRoute: ApiPublicHooksBillPaymentCheckRoute,

@@ -59,6 +59,18 @@ export function AppLayout() {
     }
   }, [isReady, sessionUser, isAdminReady, isAdmin, navigate, recordRedirect, state.location.pathname]);
 
+  // Retoma o plano escolhido na landing page antes do cadastro — o signup
+  // exige confirmação de e-mail (sem sessão imediata), então o plano fica
+  // guardado no localStorage até o primeiro login real acontecer aqui.
+  useEffect(() => {
+    if (!sessionUser) return;
+    let pendingPlan: string | null = null;
+    try { pendingPlan = localStorage.getItem("abio_pending_plan"); } catch {}
+    if (!pendingPlan) return;
+    try { localStorage.removeItem("abio_pending_plan"); } catch {}
+    navigate({ to: "/app/checkout", search: { plan: pendingPlan } });
+  }, [sessionUser, navigate]);
+
   // Safety-net: dispara boas-vindas no WhatsApp se ainda não foi enviada
   // (idempotente: o servidor checa welcome_sent_at).
   useEffect(() => {

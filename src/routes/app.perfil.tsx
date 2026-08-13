@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { logout } from "@/lib/user-session";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -10,9 +10,11 @@ import {
   Mail, Phone, Calendar, KeyRound, LogOut, Download, Bell, MessageCircle,
   Wallet, TrendingUp, TrendingDown, PiggyBank, ShieldCheck, BarChart3,
   Layers, Target, ListChecks, Hash, Globe, RefreshCw, Camera, ArrowUpRight, Heart,
-  ArrowDownRight, Plus, CalendarRange, Sparkles,
+  ArrowDownRight, Plus, CalendarRange, Sparkles, Ban,
 } from "lucide-react";
 import { getMySubscription, getMySubscriptionHistory } from "@/lib/subscriptions.functions";
+import { cancelMySubscription } from "@/lib/appmax.functions";
+import { getPlan } from "@/lib/plans";
 import {
   getProfileOverview, updateMyProfile, signOutAllSessions, exportMyData,
 } from "@/lib/profile.functions";
@@ -728,16 +730,27 @@ function Page() {
 // Subscription cards
 // ============================================================
 function SubscriptionCard() {
+  const qc = useQueryClient();
   const fetchSub = useServerFn(getMySubscription);
+  const runCancel = useServerFn(cancelMySubscription);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const { data: sub, isLoading } = useQuery<any>({
     queryKey: ["my-subscription"],
     queryFn: () => fetchSub() as any,
+  });
+  const mCancel = useMutation({
+    mutationFn: () => runCancel() as any,
+    onSuccess: () => {
+      setConfirmingCancel(false);
+      qc.invalidateQueries({ queryKey: ["my-subscription"] });
+      qc.invalidateQueries({ queryKey: ["my-sub-history"] });
+    },
   });
 
   if (isLoading) return <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5 animate-pulse h-32" />;
   if (!sub) return (
     <Card title="Assinatura e plano" icon={Crown} delay={0.28}>
-      <p className="text-sm text-muted-foreground">Nenhuma assinatura ativa. <Link to="/app/sistema" search={{ view: "suporte" }} className="text-primary hover:underline">Configure sua conta</Link> para aproveitar todos os recursos.</p>
+      <p className="text-sm text-muted-foreground">Nenhuma assinatura ativa. <Link to="/app/checkout" search={{ plan: "monthly" }} className="text-primary hover:underline">Assine um plano</Link> para aproveitar todos os recursos.</p>
     </Card>
   );
 
@@ -787,17 +800,44 @@ function SubscriptionCard() {
         <Tile label="Renovação" value={endsAt && !isLifetime ? new Date(endsAt).toLocaleDateString("pt-BR") : "—"} />
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-3 mt-4">
-        <Link to="/app/sistema" search={{ view: "suporte" }} className="rounded-xl border border-primary/30 bg-primary/10 text-primary px-3 py-2.5 text-sm inline-flex items-center justify-center gap-2 hover:bg-primary/20">
-          <ArrowUpRight className="h-3.5 w-3.5" /> Fazer upgrade
-        </Link>
-        <Link to="/app/sistema" search={{ view: "suporte" }} className="rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm hover:bg-background/60 inline-flex items-center justify-center gap-2">
-          <RefreshCw className="h-3.5 w-3.5" /> Renovar plano
-        </Link>
-        <Link to="/app/sistema" search={{ view: "suporte" }} className="rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm hover:bg-background/60 inline-flex items-center justify-center gap-2">
-          <ListChecks className="h-3.5 w-3.5" /> Histórico de pagamentos
-        </Link>
-      </div>
+      {(() => {
+        const checkoutPlan = getPlan(sub.plan_slug)?.id ?? "monthly";
+        return (
+          <div className="grid sm:grid-cols-3 gap-3 mt-4">
+            <Link to="/app/checkout" search={{ plan: checkoutPlan }} className="rounded-xl border border-primary/30 bg-primary/10 text-primary px-3 py-2.5 text-sm inline-flex items-center justify-center gap-2 hover:bg-primary/20">
+              <ArrowUpRight className="h-3.5 w-3.5" /> Fazer upgrade
+            </Link>
+            <Link to="/app/checkout" search={{ plan: checkoutPlan }} className="rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm hover:bg-background/60 inline-flex items-center justify-center gap-2">
+              <RefreshCw className="h-3.5 w-3.5" /> Renovar plano
+            </Link>
+            <Link to="/app/sistema" search={{ view: "suporte" }} className="rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm hover:bg-background/60 inline-flex items-center justify-center gap-2">
+              <ListChecks className="h-3.5 w-3.5" /> Histórico de pagamentos
+            </Link>
+          </div>
+        );
+      })()}
+
+      {!isCancelled && !isExpired && sub.appmax_subscription_id ? (
+        <div className="mt-3 flex items-center justify-end">
+          {confirmingCancel ? (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Cancelar a renovação automática?</span>
+              <button onClick={() => mCancel.mutate()} disabled={mCancel.isPending}
+                className="rounded-lg border border-destructive/30 text-destructive px-2.5 py-1.5 hover:bg-destructive/10 disabled:opacity-50">
+                {mCancel.isPending ? "Cancelando..." : "Sim, cancelar"}
+              </button>
+              <button onClick={() => setConfirmingCancel(false)} className="rounded-lg border border-border px-2.5 py-1.5 hover:bg-background/40">
+                Voltar
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmingCancel(true)}
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive">
+              <Ban className="h-3.5 w-3.5" /> Cancelar assinatura
+            </button>
+          )}
+        </div>
+      ) : null}
     </Card>
   );
 }

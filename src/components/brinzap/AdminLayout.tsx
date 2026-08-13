@@ -3,13 +3,14 @@ import { useEffect } from "react";
 import { adminLogout } from "@/lib/admin-session";
 import { useAuth } from "@/lib/auth-context";
 import { AppLogo } from "@/components/brinzap/AppLogo";
-import { LayoutDashboard, Users, LogOut, ShieldCheck, MessageCircle, Bot, Activity, Server, Wallet, Shield, Copy, ClipboardList, Inbox, Gauge, Handshake } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, ShieldCheck, MessageCircle, Bot, Activity, Server, Wallet, Shield, Copy, ClipboardList, Inbox, Gauge, Handshake, CreditCard } from "lucide-react";
 
 const nav = [
   { to: "/admin", label: "Visão geral", icon: LayoutDashboard, exact: true },
   { to: "/admin/users", label: "Usuários", icon: Users, exact: false },
   { to: "/admin/afiliados", label: "Afiliados", icon: Handshake, exact: false },
   { to: "/admin/financeiro", label: "Financeiro", icon: Wallet, exact: false },
+  { to: "/admin/pagamentos", label: "Pagamentos", icon: CreditCard, exact: false },
   { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle, exact: false },
   { to: "/admin/pending-messages", label: "Mensagens Pendentes", icon: Inbox, exact: false },
   { to: "/admin/onboarding", label: "Onboarding", icon: ClipboardList, exact: false },

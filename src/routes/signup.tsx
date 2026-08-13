@@ -5,14 +5,24 @@ import { useAuth } from "@/lib/auth-context";
 import { AppLogo } from "@/components/brinzap/AppLogo";
 import { Phone, Mail, User } from "lucide-react";
 import { PasswordInput, PasswordStrengthMeter, passwordStrength } from "@/components/brinzap/PasswordInput";
+import { PLAN_SLUGS } from "@/lib/plans";
 
 export const Route = createFileRoute("/signup")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    plan: (typeof s.plan === "string" && PLAN_SLUGS.includes(s.plan) ? s.plan : undefined) as string | undefined,
+  }),
   head: () => ({ meta: [{ title: "Criar conta · Abio" }] }),
   component: SignupPage,
 });
 
+// Cadastro exige confirmação de e-mail (sem sessão imediata após signup()),
+// então o plano escolhido na landing page é guardado aqui e só é retomado
+// depois que a pessoa efetivamente loga pela primeira vez — ver AppLayout.tsx.
+const PENDING_PLAN_KEY = "abio_pending_plan";
+
 function SignupPage() {
   const navigate = useNavigate();
+  const { plan } = Route.useSearch();
   const { isReady, user, recordRedirect } = useAuth();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -45,6 +55,9 @@ function SignupPage() {
         const { sendWelcomeWhatsapp } = await import("@/lib/brinzap.functions");
         sendWelcomeWhatsapp({ data: { phone } }).catch(() => {});
       } catch {}
+      if (plan) {
+        try { localStorage.setItem(PENDING_PLAN_KEY, plan); } catch {}
+      }
     }
     setLoading(false);
     if (r.ok) setOk(true);
