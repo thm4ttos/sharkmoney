@@ -85,7 +85,7 @@ function apiBase(env: AppmaxEnv) {
   return env === "production" ? "https://api.appmax.com.br" : "https://api.sandboxappmax.com.br";
 }
 
-async function getAppmaxToken(): Promise<{ token: string; creds: AppmaxCreds }> {
+export async function getAppmaxToken(): Promise<{ token: string; creds: AppmaxCreds }> {
   const creds = await loadAppmaxCreds();
   if (!creds.clientId || !creds.clientSecret) {
     throw new Error("Credenciais Appmax não configuradas.");

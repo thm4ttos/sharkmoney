@@ -3,8 +3,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { CreditCard, Save, CheckCircle2 } from "lucide-react";
-import { adminGetAppmaxCreds, adminSaveAppmaxCreds } from "@/lib/appmax-admin.functions";
+import { CreditCard, Save, CheckCircle2, XCircle, Plug } from "lucide-react";
+import { adminGetAppmaxCreds, adminSaveAppmaxCreds, adminTestAppmaxConnection } from "@/lib/appmax-admin.functions";
 
 export const Route = createFileRoute("/admin/pagamentos")({
   head: () => ({ meta: [{ title: "Pagamentos · Abio Admin" }, { name: "robots", content: "noindex" }] }),
@@ -33,6 +33,7 @@ function Page() {
 function CredsCard() {
   const get = useServerFn(adminGetAppmaxCreds);
   const save = useServerFn(adminSaveAppmaxCreds);
+  const test = useServerFn(adminTestAppmaxConnection);
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["appmax-creds"], queryFn: () => get() });
 
@@ -54,6 +55,7 @@ function CredsCard() {
     mutationFn: () => save({ data: form }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["appmax-creds"] }),
   });
+  const testMutation = useMutation({ mutationFn: () => test() as any });
 
   return (
     <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-4 max-w-2xl">
@@ -96,7 +98,25 @@ function CredsCard() {
             </button>
             {mutation.isSuccess && <span className="text-xs text-primary inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> salvo</span>}
             {mutation.isError && <span className="text-xs text-destructive">{(mutation.error as any)?.message ?? "Erro ao salvar"}</span>}
+
+            <button
+              onClick={() => testMutation.mutate()}
+              disabled={testMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm hover:bg-background/40 disabled:opacity-50"
+            >
+              <Plug className="h-4 w-4" /> {testMutation.isPending ? "Testando…" : "Testar conexão"}
+            </button>
           </div>
+          {testMutation.data?.ok && (
+            <p className="text-xs text-primary inline-flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Conectado ({testMutation.data.environment}) — a Appmax aceitou as credenciais.
+            </p>
+          )}
+          {testMutation.data && !testMutation.data.ok && (
+            <p className="text-xs text-destructive inline-flex items-center gap-1">
+              <XCircle className="h-3.5 w-3.5" /> {testMutation.data.error}
+            </p>
+          )}
         </div>
       )}
     </section>

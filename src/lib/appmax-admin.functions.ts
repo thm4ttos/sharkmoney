@@ -64,3 +64,20 @@ export const adminSaveAppmaxCreds = createServerFn({ method: "POST" })
     invalidateAppmaxCredsCache();
     return { ok: true };
   });
+
+// Confirma que a Appmax aceita as credenciais salvas (troca OAuth2 real),
+// sem nunca expor o client_secret de volta pro navegador/chat — o teste
+// roda inteiro no servidor, só o resultado (ok/erro) volta pro admin.
+export const adminTestAppmaxConnection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await ensureAdmin(supabase, userId);
+    try {
+      const { getAppmaxToken } = await import("@/lib/appmax.server");
+      const { creds } = await getAppmaxToken();
+      return { ok: true as const, environment: creds.environment };
+    } catch (e: any) {
+      return { ok: false as const, error: e?.message ?? "Falha desconhecida" };
+    }
+  });
