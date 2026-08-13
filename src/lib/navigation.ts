@@ -1,5 +1,5 @@
 import {
-  User as UserIcon, ArrowLeftRight, Bell, Sparkles, Zap,
+  User as UserIcon, ArrowLeftRight, Bell, Sparkles,
   Wallet, CalendarDays, Repeat, CreditCard, PiggyBank,
   AlertTriangle, Target, Crown, Heart, Settings2,
   type LucideIcon,
@@ -21,7 +21,6 @@ export const navigationSections: NavSection[] = [
       { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },
       { to: "/app/compromissos", label: "Lembretes", icon: Bell },
       { to: "/app/habitos", label: "Rotina & Hábitos", icon: Sparkles },
-      { to: "/app/lancar", label: "Lançar rápido", icon: Zap },
     ],
   },
   {

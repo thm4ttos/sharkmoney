@@ -11,7 +11,7 @@ import { MobileBottomNav } from "@/components/brinzap/MobileBottomNav";
 import { DesktopSidebar } from "@/components/brinzap/DesktopSidebar";
 
 import {
-  LayoutDashboard, Zap, ArrowLeftRight, PiggyBank,
+  LayoutDashboard, ArrowLeftRight, PiggyBank,
   CreditCard, AlertTriangle, Sparkles, Bell, Wallet, Settings2,
   User as UserIcon, LogOut, Menu, X, CalendarDays, Target, Repeat, Handshake, Heart, type LucideIcon
 } from "lucide-react";
@@ -23,7 +23,6 @@ const nav: NavItem[] = [
   { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },
   { to: "/app/compromissos", label: "Lembretes", icon: Bell },
   { to: "/app/habitos", label: "Rotina & Hábitos", icon: Sparkles },
-  { to: "/app/lancar", label: "Lançar Rápido", icon: Zap },
   { to: "/app/dashboard", label: "Central Financeira", icon: LayoutDashboard },
   { to: "/app/calendario", label: "Calendário", icon: CalendarDays },
   { to: "/app/contas-fixas", label: "Contas Fixas", icon: Repeat },
