@@ -22,6 +22,7 @@ export const navigationSections: NavSection[] = [
       { to: "/app/compromissos", label: "Lembretes", icon: Bell },
       { to: "/app/habitos", label: "Rotina & Hábitos", icon: Sparkles },
       { to: "/app/lancar", label: "Lançar rápido", icon: Zap },
+      { to: "/app/sistema", label: "Sistema", icon: Settings2 },
     ],
   },
   {
@@ -37,12 +38,6 @@ export const navigationSections: NavSection[] = [
       { to: "/app/casal", label: "Casal", icon: Heart },
       { to: "/app/liberdade", label: "Liberdade Financeira", icon: Crown },
       { to: "/app/salario", label: "Salário", icon: Wallet },
-    ],
-  },
-  {
-    title: "SISTEMA",
-    items: [
-      { to: "/app/sistema", label: "Sistema", icon: Settings2 },
     ],
   },
 ];
