@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,8 +8,6 @@ import { formatBRL } from "@/lib/user-mock";
 import { formatDayMonthSP } from "@/lib/datetime";
 import { Upload, FileText, Loader2, Sparkles, Check, X, Undo2, ClipboardPaste, History, Image as ImageIcon, Bot, Send } from "lucide-react";
 import { toast } from "sonner";
-
-export const Route = createFileRoute("/app/importar")({ component: ImportPage });
 
 const CATEGORIES = [
   "Moradia", "Alimentação", "Transporte", "Saúde", "Educação",
@@ -50,7 +48,7 @@ function friendlyError(raw: unknown): string {
   return "Não consegui processar agora. Tente novamente em instantes.";
 }
 
-function ImportPage() {
+export function ImportarView() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const previewFn = useServerFn(previewImport);

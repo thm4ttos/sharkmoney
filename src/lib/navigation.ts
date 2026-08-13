@@ -1,8 +1,7 @@
 import {
   Home, User as UserIcon, ArrowLeftRight, Bell, Sparkles, Zap,
   Wallet, CalendarDays, Repeat, CreditCard, PiggyBank,
-  AlertTriangle, Target, Crown, FileBarChart2, Upload, MessageCircle,
-  LifeBuoy, ShieldCheck, Heart,
+  AlertTriangle, Target, Crown, Heart, Settings2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,11 +42,7 @@ export const navigationSections: NavSection[] = [
   {
     title: "SISTEMA",
     items: [
-      { to: "/app/whatsapp", label: "WhatsApp", icon: MessageCircle },
-      { to: "/app/suporte", label: "Suporte", icon: LifeBuoy },
-      { to: "/app/relatorios", label: "Relatórios", icon: FileBarChart2 },
-      { to: "/app/auditoria", label: "Auditoria", icon: ShieldCheck },
-      { to: "/app/importar", label: "Importar Histórico", icon: Upload },
+      { to: "/app/sistema", label: "Sistema", icon: Settings2 },
     ],
   },
 ];

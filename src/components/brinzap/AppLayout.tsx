@@ -12,8 +12,8 @@ import { DesktopSidebar } from "@/components/brinzap/DesktopSidebar";
 
 import {
   LayoutDashboard, Home, Zap, ArrowLeftRight, PiggyBank,
-  CreditCard, AlertTriangle, Sparkles, Bell, FileBarChart2, Wallet,
-  LifeBuoy, User as UserIcon, LogOut, MessageCircle, Menu, X, CalendarDays, Target, Repeat, Upload, Handshake, Heart, type LucideIcon
+  CreditCard, AlertTriangle, Sparkles, Bell, Wallet, Settings2,
+  User as UserIcon, LogOut, Menu, X, CalendarDays, Target, Repeat, Handshake, Heart, type LucideIcon
 } from "lucide-react";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; exact?: boolean };
@@ -27,18 +27,15 @@ const nav: NavItem[] = [
   { to: "/app/contas-fixas", label: "Contas Fixas", icon: Repeat },
   { to: "/app/lancar", label: "Lançar Rápido", icon: Zap },
   { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },
-  { to: "/app/importar", label: "Importar Histórico", icon: Upload },
-  { to: "/app/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { to: "/app/orcamento", label: "Orçamento", icon: PiggyBank },
   { to: "/app/parcelados", label: "Compras Parceladas", icon: CreditCard },
   { to: "/app/dividas", label: "Dívidas", icon: AlertTriangle },
   { to: "/app/liberdade", label: "Liberdade Financeira", icon: Sparkles },
   { to: "/app/habitos", label: "Rotina & Hábitos", icon: Sparkles },
   { to: "/app/compromissos", label: "Lembretes", icon: Bell },
-  { to: "/app/relatorios", label: "Relatórios", icon: FileBarChart2 },
   { to: "/app/salario", label: "Salário", icon: Wallet },
   { to: "/app/afiliados", label: "Afiliados", icon: Handshake },
-  { to: "/app/suporte", label: "Suporte", icon: LifeBuoy },
+  { to: "/app/sistema", label: "Sistema", icon: Settings2 },
 ] as const;
 
 export function AppLayout() {

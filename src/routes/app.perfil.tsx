@@ -494,7 +494,7 @@ function Page() {
           </button>
         </div>
         <p className="text-[11px] text-muted-foreground mt-3">
-          Para zerar seu histórico financeiro, acesse a aba <Link to="/app/transacoes" search={{ kind: undefined }} className="text-primary hover:underline">Transações</Link>.
+          Para zerar seu histórico financeiro, acesse a aba <Link to="/app/transacoes" search={{ kind: undefined, view: "lista" }} className="text-primary hover:underline">Transações</Link>.
         </p>
       </Card>
 
@@ -521,7 +521,7 @@ function SubscriptionCard() {
   if (isLoading) return <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5 animate-pulse h-32" />;
   if (!sub) return (
     <Card title="Assinatura e plano" icon={Crown} delay={0.28}>
-      <p className="text-sm text-muted-foreground">Nenhuma assinatura ativa. <Link to="/app/suporte" className="text-primary hover:underline">Configure sua conta</Link> para aproveitar todos os recursos.</p>
+      <p className="text-sm text-muted-foreground">Nenhuma assinatura ativa. <Link to="/app/sistema" search={{ view: "suporte" }} className="text-primary hover:underline">Configure sua conta</Link> para aproveitar todos os recursos.</p>
     </Card>
   );
 
@@ -572,13 +572,13 @@ function SubscriptionCard() {
       </div>
 
       <div className="grid sm:grid-cols-3 gap-3 mt-4">
-        <Link to="/app/suporte" className="rounded-xl border border-primary/30 bg-primary/10 text-primary px-3 py-2.5 text-sm inline-flex items-center justify-center gap-2 hover:bg-primary/20">
+        <Link to="/app/sistema" search={{ view: "suporte" }} className="rounded-xl border border-primary/30 bg-primary/10 text-primary px-3 py-2.5 text-sm inline-flex items-center justify-center gap-2 hover:bg-primary/20">
           <ArrowUpRight className="h-3.5 w-3.5" /> Fazer upgrade
         </Link>
-        <Link to="/app/suporte" className="rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm hover:bg-background/60 inline-flex items-center justify-center gap-2">
+        <Link to="/app/sistema" search={{ view: "suporte" }} className="rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm hover:bg-background/60 inline-flex items-center justify-center gap-2">
           <RefreshCw className="h-3.5 w-3.5" /> Renovar plano
         </Link>
-        <Link to="/app/suporte" className="rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm hover:bg-background/60 inline-flex items-center justify-center gap-2">
+        <Link to="/app/sistema" search={{ view: "suporte" }} className="rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm hover:bg-background/60 inline-flex items-center justify-center gap-2">
           <ListChecks className="h-3.5 w-3.5" /> Histórico de pagamentos
         </Link>
       </div>

@@ -19,19 +19,16 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as AppWhatsappRouteImport } from './routes/app.whatsapp'
 import { Route as AppTransacoesRouteImport } from './routes/app.transacoes'
-import { Route as AppSuporteRouteImport } from './routes/app.suporte'
+import { Route as AppSistemaRouteImport } from './routes/app.sistema'
 import { Route as AppSalarioRouteImport } from './routes/app.salario'
 import { Route as AppResumoRouteImport } from './routes/app.resumo'
-import { Route as AppRelatoriosRouteImport } from './routes/app.relatorios'
 import { Route as AppPerfilRouteImport } from './routes/app.perfil'
 import { Route as AppParceladosRouteImport } from './routes/app.parcelados'
 import { Route as AppOrcamentoRouteImport } from './routes/app.orcamento'
 import { Route as AppMetasRouteImport } from './routes/app.metas'
 import { Route as AppLiberdadeRouteImport } from './routes/app.liberdade'
 import { Route as AppLancarRouteImport } from './routes/app.lancar'
-import { Route as AppImportarRouteImport } from './routes/app.importar'
 import { Route as AppHabitosRouteImport } from './routes/app.habitos'
 import { Route as AppDividasRouteImport } from './routes/app.dividas'
 import { Route as AppDebugPerfilRouteImport } from './routes/app.debug-perfil'
@@ -41,7 +38,6 @@ import { Route as AppCompromissosRouteImport } from './routes/app.compromissos'
 import { Route as AppCasalDashboardRouteImport } from './routes/app.casal-dashboard'
 import { Route as AppCasalRouteImport } from './routes/app.casal'
 import { Route as AppCalendarioRouteImport } from './routes/app.calendario'
-import { Route as AppAuditoriaRouteImport } from './routes/app.auditoria'
 import { Route as AppAfiliadosRouteImport } from './routes/app.afiliados'
 import { Route as AdminWhatsappRouteImport } from './routes/admin.whatsapp'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
@@ -122,19 +118,14 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
-const AppWhatsappRoute = AppWhatsappRouteImport.update({
-  id: '/whatsapp',
-  path: '/whatsapp',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppTransacoesRoute = AppTransacoesRouteImport.update({
   id: '/transacoes',
   path: '/transacoes',
   getParentRoute: () => AppRoute,
 } as any)
-const AppSuporteRoute = AppSuporteRouteImport.update({
-  id: '/suporte',
-  path: '/suporte',
+const AppSistemaRoute = AppSistemaRouteImport.update({
+  id: '/sistema',
+  path: '/sistema',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSalarioRoute = AppSalarioRouteImport.update({
@@ -145,11 +136,6 @@ const AppSalarioRoute = AppSalarioRouteImport.update({
 const AppResumoRoute = AppResumoRouteImport.update({
   id: '/resumo',
   path: '/resumo',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppRelatoriosRoute = AppRelatoriosRouteImport.update({
-  id: '/relatorios',
-  path: '/relatorios',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPerfilRoute = AppPerfilRouteImport.update({
@@ -180,11 +166,6 @@ const AppLiberdadeRoute = AppLiberdadeRouteImport.update({
 const AppLancarRoute = AppLancarRouteImport.update({
   id: '/lancar',
   path: '/lancar',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppImportarRoute = AppImportarRouteImport.update({
-  id: '/importar',
-  path: '/importar',
   getParentRoute: () => AppRoute,
 } as any)
 const AppHabitosRoute = AppHabitosRouteImport.update({
@@ -230,11 +211,6 @@ const AppCasalRoute = AppCasalRouteImport.update({
 const AppCalendarioRoute = AppCalendarioRouteImport.update({
   id: '/calendario',
   path: '/calendario',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppAuditoriaRoute = AppAuditoriaRouteImport.update({
-  id: '/auditoria',
-  path: '/auditoria',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAfiliadosRoute = AppAfiliadosRouteImport.update({
@@ -415,7 +391,6 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/app/afiliados': typeof AppAfiliadosRoute
-  '/app/auditoria': typeof AppAuditoriaRoute
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
@@ -425,19 +400,16 @@ export interface FileRoutesByFullPath {
   '/app/debug-perfil': typeof AppDebugPerfilRoute
   '/app/dividas': typeof AppDividasRoute
   '/app/habitos': typeof AppHabitosRoute
-  '/app/importar': typeof AppImportarRoute
   '/app/lancar': typeof AppLancarRoute
   '/app/liberdade': typeof AppLiberdadeRoute
   '/app/metas': typeof AppMetasRoute
   '/app/orcamento': typeof AppOrcamentoRoute
   '/app/parcelados': typeof AppParceladosRoute
   '/app/perfil': typeof AppPerfilRoute
-  '/app/relatorios': typeof AppRelatoriosRoute
   '/app/resumo': typeof AppResumoRoute
   '/app/salario': typeof AppSalarioRoute
-  '/app/suporte': typeof AppSuporteRoute
+  '/app/sistema': typeof AppSistemaRoute
   '/app/transacoes': typeof AppTransacoesRoute
-  '/app/whatsapp': typeof AppWhatsappRoute
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
@@ -477,7 +449,6 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/app/afiliados': typeof AppAfiliadosRoute
-  '/app/auditoria': typeof AppAuditoriaRoute
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
@@ -487,19 +458,16 @@ export interface FileRoutesByTo {
   '/app/debug-perfil': typeof AppDebugPerfilRoute
   '/app/dividas': typeof AppDividasRoute
   '/app/habitos': typeof AppHabitosRoute
-  '/app/importar': typeof AppImportarRoute
   '/app/lancar': typeof AppLancarRoute
   '/app/liberdade': typeof AppLiberdadeRoute
   '/app/metas': typeof AppMetasRoute
   '/app/orcamento': typeof AppOrcamentoRoute
   '/app/parcelados': typeof AppParceladosRoute
   '/app/perfil': typeof AppPerfilRoute
-  '/app/relatorios': typeof AppRelatoriosRoute
   '/app/resumo': typeof AppResumoRoute
   '/app/salario': typeof AppSalarioRoute
-  '/app/suporte': typeof AppSuporteRoute
+  '/app/sistema': typeof AppSistemaRoute
   '/app/transacoes': typeof AppTransacoesRoute
-  '/app/whatsapp': typeof AppWhatsappRoute
   '/admin': typeof AdminIndexRoute
   '/app': typeof AppIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
@@ -542,7 +510,6 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/app/afiliados': typeof AppAfiliadosRoute
-  '/app/auditoria': typeof AppAuditoriaRoute
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
@@ -552,19 +519,16 @@ export interface FileRoutesById {
   '/app/debug-perfil': typeof AppDebugPerfilRoute
   '/app/dividas': typeof AppDividasRoute
   '/app/habitos': typeof AppHabitosRoute
-  '/app/importar': typeof AppImportarRoute
   '/app/lancar': typeof AppLancarRoute
   '/app/liberdade': typeof AppLiberdadeRoute
   '/app/metas': typeof AppMetasRoute
   '/app/orcamento': typeof AppOrcamentoRoute
   '/app/parcelados': typeof AppParceladosRoute
   '/app/perfil': typeof AppPerfilRoute
-  '/app/relatorios': typeof AppRelatoriosRoute
   '/app/resumo': typeof AppResumoRoute
   '/app/salario': typeof AppSalarioRoute
-  '/app/suporte': typeof AppSuporteRoute
+  '/app/sistema': typeof AppSistemaRoute
   '/app/transacoes': typeof AppTransacoesRoute
-  '/app/whatsapp': typeof AppWhatsappRoute
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
@@ -608,7 +572,6 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/whatsapp'
     | '/app/afiliados'
-    | '/app/auditoria'
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
@@ -618,19 +581,16 @@ export interface FileRouteTypes {
     | '/app/debug-perfil'
     | '/app/dividas'
     | '/app/habitos'
-    | '/app/importar'
     | '/app/lancar'
     | '/app/liberdade'
     | '/app/metas'
     | '/app/orcamento'
     | '/app/parcelados'
     | '/app/perfil'
-    | '/app/relatorios'
     | '/app/resumo'
     | '/app/salario'
-    | '/app/suporte'
+    | '/app/sistema'
     | '/app/transacoes'
-    | '/app/whatsapp'
     | '/admin/'
     | '/app/'
     | '/admin/users/$userId'
@@ -670,7 +630,6 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/whatsapp'
     | '/app/afiliados'
-    | '/app/auditoria'
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
@@ -680,19 +639,16 @@ export interface FileRouteTypes {
     | '/app/debug-perfil'
     | '/app/dividas'
     | '/app/habitos'
-    | '/app/importar'
     | '/app/lancar'
     | '/app/liberdade'
     | '/app/metas'
     | '/app/orcamento'
     | '/app/parcelados'
     | '/app/perfil'
-    | '/app/relatorios'
     | '/app/resumo'
     | '/app/salario'
-    | '/app/suporte'
+    | '/app/sistema'
     | '/app/transacoes'
-    | '/app/whatsapp'
     | '/admin'
     | '/app'
     | '/admin/users/$userId'
@@ -734,7 +690,6 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/whatsapp'
     | '/app/afiliados'
-    | '/app/auditoria'
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
@@ -744,19 +699,16 @@ export interface FileRouteTypes {
     | '/app/debug-perfil'
     | '/app/dividas'
     | '/app/habitos'
-    | '/app/importar'
     | '/app/lancar'
     | '/app/liberdade'
     | '/app/metas'
     | '/app/orcamento'
     | '/app/parcelados'
     | '/app/perfil'
-    | '/app/relatorios'
     | '/app/resumo'
     | '/app/salario'
-    | '/app/suporte'
+    | '/app/sistema'
     | '/app/transacoes'
-    | '/app/whatsapp'
     | '/admin/'
     | '/app/'
     | '/admin/users/$userId'
@@ -871,13 +823,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/app/whatsapp': {
-      id: '/app/whatsapp'
-      path: '/whatsapp'
-      fullPath: '/app/whatsapp'
-      preLoaderRoute: typeof AppWhatsappRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/app/transacoes': {
       id: '/app/transacoes'
       path: '/transacoes'
@@ -885,11 +830,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTransacoesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/suporte': {
-      id: '/app/suporte'
-      path: '/suporte'
-      fullPath: '/app/suporte'
-      preLoaderRoute: typeof AppSuporteRouteImport
+    '/app/sistema': {
+      id: '/app/sistema'
+      path: '/sistema'
+      fullPath: '/app/sistema'
+      preLoaderRoute: typeof AppSistemaRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/salario': {
@@ -904,13 +849,6 @@ declare module '@tanstack/react-router' {
       path: '/resumo'
       fullPath: '/app/resumo'
       preLoaderRoute: typeof AppResumoRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/relatorios': {
-      id: '/app/relatorios'
-      path: '/relatorios'
-      fullPath: '/app/relatorios'
-      preLoaderRoute: typeof AppRelatoriosRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/perfil': {
@@ -953,13 +891,6 @@ declare module '@tanstack/react-router' {
       path: '/lancar'
       fullPath: '/app/lancar'
       preLoaderRoute: typeof AppLancarRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/importar': {
-      id: '/app/importar'
-      path: '/importar'
-      fullPath: '/app/importar'
-      preLoaderRoute: typeof AppImportarRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/habitos': {
@@ -1023,13 +954,6 @@ declare module '@tanstack/react-router' {
       path: '/calendario'
       fullPath: '/app/calendario'
       preLoaderRoute: typeof AppCalendarioRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/auditoria': {
-      id: '/app/auditoria'
-      path: '/auditoria'
-      fullPath: '/app/auditoria'
-      preLoaderRoute: typeof AppAuditoriaRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/afiliados': {
@@ -1290,7 +1214,6 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface AppRouteChildren {
   AppAfiliadosRoute: typeof AppAfiliadosRoute
-  AppAuditoriaRoute: typeof AppAuditoriaRoute
   AppCalendarioRoute: typeof AppCalendarioRoute
   AppCasalRoute: typeof AppCasalRoute
   AppCasalDashboardRoute: typeof AppCasalDashboardRoute
@@ -1300,25 +1223,21 @@ interface AppRouteChildren {
   AppDebugPerfilRoute: typeof AppDebugPerfilRoute
   AppDividasRoute: typeof AppDividasRoute
   AppHabitosRoute: typeof AppHabitosRoute
-  AppImportarRoute: typeof AppImportarRoute
   AppLancarRoute: typeof AppLancarRoute
   AppLiberdadeRoute: typeof AppLiberdadeRoute
   AppMetasRoute: typeof AppMetasRoute
   AppOrcamentoRoute: typeof AppOrcamentoRoute
   AppParceladosRoute: typeof AppParceladosRoute
   AppPerfilRoute: typeof AppPerfilRoute
-  AppRelatoriosRoute: typeof AppRelatoriosRoute
   AppResumoRoute: typeof AppResumoRoute
   AppSalarioRoute: typeof AppSalarioRoute
-  AppSuporteRoute: typeof AppSuporteRoute
+  AppSistemaRoute: typeof AppSistemaRoute
   AppTransacoesRoute: typeof AppTransacoesRoute
-  AppWhatsappRoute: typeof AppWhatsappRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAfiliadosRoute: AppAfiliadosRoute,
-  AppAuditoriaRoute: AppAuditoriaRoute,
   AppCalendarioRoute: AppCalendarioRoute,
   AppCasalRoute: AppCasalRoute,
   AppCasalDashboardRoute: AppCasalDashboardRoute,
@@ -1328,19 +1247,16 @@ const AppRouteChildren: AppRouteChildren = {
   AppDebugPerfilRoute: AppDebugPerfilRoute,
   AppDividasRoute: AppDividasRoute,
   AppHabitosRoute: AppHabitosRoute,
-  AppImportarRoute: AppImportarRoute,
   AppLancarRoute: AppLancarRoute,
   AppLiberdadeRoute: AppLiberdadeRoute,
   AppMetasRoute: AppMetasRoute,
   AppOrcamentoRoute: AppOrcamentoRoute,
   AppParceladosRoute: AppParceladosRoute,
   AppPerfilRoute: AppPerfilRoute,
-  AppRelatoriosRoute: AppRelatoriosRoute,
   AppResumoRoute: AppResumoRoute,
   AppSalarioRoute: AppSalarioRoute,
-  AppSuporteRoute: AppSuporteRoute,
+  AppSistemaRoute: AppSistemaRoute,
   AppTransacoesRoute: AppTransacoesRoute,
-  AppWhatsappRoute: AppWhatsappRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

@@ -1,15 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { LifeBuoy, MessageCircle, Send } from "lucide-react";
-import { useAuthProfile } from "@/hooks/use-auth-profile";
 import { listMyTickets, createTicket } from "@/lib/support.functions";
-
-export const Route = createFileRoute("/app/suporte")({
-  head: () => ({ meta: [{ title: "Suporte · Abio" }] }),
-  component: Page,
-});
 
 const FAQ = [
   { q: "Como começo a usar?", a: "Mande mensagens, áudios ou comprovantes para o WhatsApp do Abio. Tudo é registrado automaticamente." },
@@ -19,8 +12,7 @@ const FAQ = [
   { q: "Como apago todos os dados?", a: "Em Início, use ‘Zerar Todos os Dados’ na seção Gerenciamento da Conta." },
 ];
 
-function Page() {
-  const { profile } = useAuthProfile();
+export function SuporteView() {
   const qc = useQueryClient();
   const list = useServerFn(listMyTickets);
   const create = useServerFn(createTicket);

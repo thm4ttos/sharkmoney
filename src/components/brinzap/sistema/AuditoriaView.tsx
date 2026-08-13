@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,20 +14,6 @@ import {
   ShieldCheck, Loader2, AlertTriangle, Download, Search, X, RefreshCw, Copy, CheckCircle2,
   Pencil, Trash2, ExternalLink, History, Columns2,
 } from "lucide-react";
-
-export const Route = createFileRoute("/app/auditoria")({
-  head: () => ({
-    meta: [
-      { title: "Auditoria financeira — Abio" },
-      { name: "description", content: "Relação auditável das transações que compõem o seu saldo no abio: período, origem, vínculos, duplicidades e correções." },
-      { property: "og:title", content: "Auditoria financeira — Abio" },
-      { property: "og:description", content: "Veja, filtre por período e corrija exatamente os lançamentos que formam o seu saldo." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
-  component: AuditPage,
-});
 
 const PERIOD_KEY = "abio:auditoria:period";
 
@@ -49,7 +35,7 @@ function toLocalInput(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function AuditPage() {
+export function AuditoriaView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const run = useServerFn(auditLedger);
@@ -200,7 +186,7 @@ function AuditPage() {
         r.status, r.duplicateOf.join(" "),
       ].join(";"));
     }
-    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -505,7 +491,7 @@ function AuditPage() {
                 >
                   Estornar
                 </ActionBtn>
-                <ActionBtn onClick={() => navigate({ to: "/app/transacoes" })} icon={<ExternalLink className="h-3.5 w-3.5" />}>
+                <ActionBtn onClick={() => navigate({ to: "/app/transacoes", search: { kind: undefined, view: "lista" } })} icon={<ExternalLink className="h-3.5 w-3.5" />}>
                   Abrir em Transações
                 </ActionBtn>
               </div>

@@ -1,4 +1,3 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -6,13 +5,9 @@ import { FileBarChart2, Download, FileSpreadsheet } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import { getReport } from "@/lib/reports.functions";
 
-export const Route = createFileRoute("/app/relatorios")({
-  head: () => ({ meta: [{ title: "Relatórios · Abio" }] }),
-  component: Page,
-});
 const BRL = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n ?? 0);
 
-function Page() {
+export function RelatoriosView() {
   const run = useServerFn(getReport);
   const [period, setPeriod] = useState<"all" | "month" | "quarter" | "year">("all");
   const m = useMutation<any>({ mutationFn: () => run({ data: { period } }) as any });
