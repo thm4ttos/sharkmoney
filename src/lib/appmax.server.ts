@@ -43,10 +43,13 @@ export async function loadAppmaxCreds(): Promise<AppmaxCreds> {
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (data?.client_id && data?.client_secret) {
+    if (data) {
+      // A linha do banco pode existir com só o external_id preenchido (etapa
+      // exigida pela Appmax antes mesmo do client_id/secret existirem) — por
+      // isso não exige client_id/client_secret pra considerar a linha válida.
       const creds: AppmaxCreds = {
-        clientId: data.client_id,
-        clientSecret: data.client_secret,
+        clientId: data.client_id ?? "",
+        clientSecret: data.client_secret ?? "",
         externalId: data.external_id ?? "",
         environment: (data.environment as AppmaxEnv) ?? "sandbox",
         source: "db",

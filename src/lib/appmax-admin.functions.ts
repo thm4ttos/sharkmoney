@@ -30,8 +30,11 @@ export const adminSaveAppmaxCreds = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) =>
     z.object({
-      client_id: z.string().min(3).max(200),
-      client_secret: z.string().min(3).max(200),
+      // client_id/client_secret ficam disponíveis só depois que a Appmax termina
+      // de criar o app — o external_id (exigido no health-check da instalação)
+      // precisa poder ser salvo sozinho antes disso, então os dois são opcionais aqui.
+      client_id: z.string().max(200).optional().default(""),
+      client_secret: z.string().max(200).optional().default(""),
       external_id: z.string().max(200).optional().default(""),
       environment: z.enum(["sandbox", "production"]),
     }).parse(i),
