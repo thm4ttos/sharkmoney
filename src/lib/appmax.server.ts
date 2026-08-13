@@ -24,6 +24,8 @@ export type AppmaxCreds = {
   clientSecret: string;
   /** Identificador do "app" no Appstore da Appmax — exigido pelo Appmax.js no browser. Não é secreto. */
   externalId: string;
+  /** UUID do app (aba "Identificação" no painel da Appmax) — exigido só pelo fluxo de instalação (/app/authorize). */
+  appId: string;
   environment: AppmaxEnv;
   source: "db" | "env";
 };
@@ -39,7 +41,7 @@ export async function loadAppmaxCreds(): Promise<AppmaxCreds> {
   try {
     const { data } = await supabaseAdmin
       .from("appmax_credentials")
-      .select("client_id, client_secret, external_id, environment")
+      .select("client_id, client_secret, external_id, app_id, environment")
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -51,6 +53,7 @@ export async function loadAppmaxCreds(): Promise<AppmaxCreds> {
         clientId: data.client_id ?? "",
         clientSecret: data.client_secret ?? "",
         externalId: data.external_id ?? "",
+        appId: data.app_id ?? "",
         environment: (data.environment as AppmaxEnv) ?? "sandbox",
         source: "db",
       };
@@ -65,6 +68,7 @@ export async function loadAppmaxCreds(): Promise<AppmaxCreds> {
     clientId: process.env.APPMAX_CLIENT_ID ?? "",
     clientSecret: process.env.APPMAX_CLIENT_SECRET ?? "",
     externalId: process.env.APPMAX_EXTERNAL_ID ?? "",
+    appId: process.env.APPMAX_APP_ID ?? "",
     environment: (process.env.APPMAX_ENV as AppmaxEnv) ?? "sandbox",
     source: "env",
   };
@@ -116,6 +120,58 @@ export async function getAppmaxToken(): Promise<{ token: string; creds: AppmaxCr
     forCreds: cacheKey,
   };
   return { token: json.access_token, creds };
+}
+
+function installBase(env: AppmaxEnv) {
+  return env === "production" ? "https://admin.appmax.com.br" : "https://breakingcode.sandboxappmax.com.br";
+}
+
+/**
+ * Passo 2 do fluxo de instalação (docs.appmax.com.br/guides/instalacao.html):
+ * troca o token de nível de APP (obtido com o client_id/secret salvos) por
+ * uma "hash" de autorização, usando app_id (UUID do app) + external_key.
+ * A forma exata do corpo da resposta não veio verbatim na documentação
+ * pesquisada — por isso a busca do campo `hash` é defensiva e, se não achar,
+ * devolve o corpo bruto pra inspeção em vez de falhar silenciosamente.
+ */
+export async function authorizeAppmaxInstall(callbackUrl: string): Promise<{ hash: string; redirectUrl: string; raw: any }> {
+  const { token, creds } = await getAppmaxToken();
+  if (!creds.appId) throw new Error("App ID (UUID do app na Appmax) não configurado.");
+  const res = await fetch(`${apiBase(creds.environment)}/app/authorize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ app_id: creds.appId, external_key: creds.externalId, url_callback: callbackUrl }),
+  });
+  const text = await res.text();
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch { /* ignore */ }
+  if (!res.ok) throw new Error(`Appmax /app/authorize falhou (${res.status}): ${text.slice(0, 300)}`);
+  const hash = json?.hash ?? json?.data?.hash ?? json?.authorization_hash ?? null;
+  if (!hash) throw new Error(`Resposta sem campo "hash" reconhecido: ${text.slice(0, 500)}`);
+  return { hash, redirectUrl: `${installBase(creds.environment)}/appstore/integration/${hash}`, raw: json };
+}
+
+/**
+ * Passo 5 do fluxo: troca a hash (já autorizada pelo merchant via redirect
+ * manual no navegador) pelas credenciais de MERCHANT — as únicas que
+ * funcionam em /v1/customers, /v1/orders etc. Durante essa chamada a Appmax
+ * dispara nossa URL de health-check pra validar a instalação.
+ */
+export async function generateAppmaxMerchantCreds(hash: string): Promise<{ clientId: string; clientSecret: string; raw: any }> {
+  const { token, creds } = await getAppmaxToken();
+  const res = await fetch(`${apiBase(creds.environment)}/app/client/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ hash }),
+  });
+  const text = await res.text();
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch { /* ignore */ }
+  if (!res.ok) throw new Error(`Appmax /app/client/generate falhou (${res.status}): ${text.slice(0, 300)}`);
+  const clientId = json?.client_id ?? json?.data?.client_id ?? null;
+  const clientSecret = json?.client_secret ?? json?.data?.client_secret ?? null;
+  if (!clientId || !clientSecret) throw new Error(`Resposta sem client_id/client_secret reconhecidos: ${text.slice(0, 500)}`);
+  return { clientId, clientSecret, raw: json };
 }
 
 export async function appmaxRequest<T = any>(

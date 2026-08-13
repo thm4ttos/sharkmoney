@@ -3,8 +3,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { CreditCard, Save, CheckCircle2, XCircle, Plug } from "lucide-react";
-import { adminGetAppmaxCreds, adminSaveAppmaxCreds, adminTestAppmaxConnection } from "@/lib/appmax-admin.functions";
+import { CreditCard, Save, CheckCircle2, XCircle, Plug, ExternalLink, KeyRound } from "lucide-react";
+import {
+  adminGetAppmaxCreds, adminSaveAppmaxCreds, adminTestAppmaxConnection,
+  adminAuthorizeAppmaxInstall, adminGenerateAppmaxMerchantCreds,
+} from "@/lib/appmax-admin.functions";
 
 export const Route = createFileRoute("/admin/pagamentos")({
   head: () => ({ meta: [{ title: "Pagamentos · Abio Admin" }, { name: "robots", content: "noindex" }] }),
@@ -26,6 +29,7 @@ function Page() {
       </motion.header>
 
       <CredsCard />
+      <InstallCard />
     </div>
   );
 }
@@ -37,7 +41,7 @@ function CredsCard() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["appmax-creds"], queryFn: () => get() });
 
-  const [form, setForm] = useState({ client_id: "", client_secret: "", external_id: "", environment: "sandbox" as "sandbox" | "production" });
+  const [form, setForm] = useState({ client_id: "", client_secret: "", external_id: "", app_id: "", environment: "sandbox" as "sandbox" | "production" });
   const [touched, setTouched] = useState(false);
 
   useMemo(() => {
@@ -46,6 +50,7 @@ function CredsCard() {
         client_id: data.client_id ?? "",
         client_secret: data.client_secret ?? "",
         external_id: data.external_id ?? "",
+        app_id: data.app_id ?? "",
         environment: (data.environment as "sandbox" | "production") ?? "sandbox",
       });
     }
@@ -75,6 +80,7 @@ function CredsCard() {
           <Field label="Client ID" value={form.client_id} onChange={(v) => { setTouched(true); setForm((f) => ({ ...f, client_id: v })); }} mono />
           <Field label="Client Secret" value={form.client_secret} onChange={(v) => { setTouched(true); setForm((f) => ({ ...f, client_secret: v })); }} mono />
           <Field label="External ID (app da Appmax)" value={form.external_id} onChange={(v) => { setTouched(true); setForm((f) => ({ ...f, external_id: v })); }} mono />
+          <Field label="App ID (UUID — aba Identificação no painel da Appmax)" value={form.app_id} onChange={(v) => { setTouched(true); setForm((f) => ({ ...f, app_id: v })); }} mono />
 
           <label className="block">
             <span className="block text-xs uppercase tracking-wider text-muted-foreground mb-1">Ambiente</span>
@@ -119,6 +125,74 @@ function CredsCard() {
           )}
         </div>
       )}
+    </section>
+  );
+}
+
+function InstallCard() {
+  const authorize = useServerFn(adminAuthorizeAppmaxInstall);
+  const generate = useServerFn(adminGenerateAppmaxMerchantCreds);
+  const qc = useQueryClient();
+  const [hash, setHash] = useState("");
+
+  const mAuthorize = useMutation({
+    mutationFn: () => authorize() as any,
+    onSuccess: (res) => setHash(res.hash),
+  });
+  const mGenerate = useMutation({
+    mutationFn: () => generate({ data: { hash } }) as any,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["appmax-creds"] }),
+  });
+
+  return (
+    <section className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-4 max-w-2xl">
+      <div>
+        <h2 className="font-display text-lg">Instalar aplicativo (obter credenciais de merchant)</h2>
+        <p className="text-xs text-muted-foreground">
+          As credenciais acima só autorizam a <b>instalação</b> — pra `/v1/customers`, `/v1/orders` etc. funcionarem
+          (erro comum: <code className="text-destructive">404 Merchant not found</code>), é preciso trocar por
+          credenciais de <b>merchant</b>, geradas nesse fluxo de 2 passos. Salve Client ID/Secret/External ID/App ID
+          acima antes de começar.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-medium">1. Autorizar instalação</p>
+        <button
+          onClick={() => mAuthorize.mutate()}
+          disabled={mAuthorize.isPending}
+          className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm hover:bg-background/40 disabled:opacity-50"
+        >
+          <KeyRound className="h-4 w-4" /> {mAuthorize.isPending ? "Gerando…" : "Gerar link de autorização"}
+        </button>
+        {mAuthorize.isError && <p className="text-xs text-destructive">{(mAuthorize.error as any)?.message}</p>}
+        {mAuthorize.data?.redirectUrl && (
+          <div className="text-xs space-y-1">
+            <a href={mAuthorize.data.redirectUrl} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline">
+              <ExternalLink className="h-3.5 w-3.5" /> Abrir autorização no painel da Appmax
+            </a>
+            <p className="text-muted-foreground">
+              Abre numa aba nova — faça login com os "Dados de acesso" (e-mail/senha) do ambiente sandbox da Appmax e
+              complete a seleção da loja. Depois volte aqui pro passo 2.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2 pt-2 border-t border-border">
+        <p className="text-xs font-medium">2. Gerar credenciais de merchant</p>
+        <Field label="Hash de autorização" value={hash} onChange={setHash} mono />
+        <button
+          onClick={() => mGenerate.mutate()}
+          disabled={mGenerate.isPending || !hash.trim()}
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        >
+          {mGenerate.isPending ? "Gerando…" : "Gerar e salvar credenciais de merchant"}
+        </button>
+        {mGenerate.isSuccess && <p className="text-xs text-primary inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Credenciais de merchant salvas — o Client ID/Secret acima já foram atualizados.</p>}
+        {mGenerate.isError && <p className="text-xs text-destructive">{(mGenerate.error as any)?.message}</p>}
+      </div>
     </section>
   );
 }

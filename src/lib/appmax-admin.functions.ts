@@ -19,7 +19,7 @@ export const adminGetAppmaxCreds = createServerFn({ method: "GET" })
     await ensureAdmin(supabase, userId);
     const { data } = await supabase
       .from("appmax_credentials")
-      .select("id, client_id, client_secret, external_id, environment, updated_at")
+      .select("id, client_id, client_secret, external_id, app_id, environment, updated_at")
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -36,6 +36,7 @@ export const adminSaveAppmaxCreds = createServerFn({ method: "POST" })
       client_id: z.string().max(200).optional().default(""),
       client_secret: z.string().max(200).optional().default(""),
       external_id: z.string().max(200).optional().default(""),
+      app_id: z.string().max(200).optional().default(""),
       environment: z.enum(["sandbox", "production"]),
     }).parse(i),
   )
@@ -80,4 +81,44 @@ export const adminTestAppmaxConnection = createServerFn({ method: "POST" })
     } catch (e: any) {
       return { ok: false as const, error: e?.message ?? "Falha desconhecida" };
     }
+  });
+
+// ===== Fluxo de instalação (app-level → merchant-level) =====
+// A Appmax exige trocar as credenciais de nível de APP (só autorizam a
+// instalação) por credenciais de nível de MERCHANT (as únicas que
+// funcionam em /v1/customers, /v1/orders etc.) — ver appmax.server.ts.
+export const adminAuthorizeAppmaxInstall = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await ensureAdmin(supabase, userId);
+    const { authorizeAppmaxInstall } = await import("@/lib/appmax.server");
+    const { hash, redirectUrl } = await authorizeAppmaxInstall("https://abio.fun/admin/pagamentos");
+    return { hash, redirectUrl };
+  });
+
+export const adminGenerateAppmaxMerchantCreds = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({ hash: z.string().min(3).max(500) }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await ensureAdmin(supabase, userId);
+    const { generateAppmaxMerchantCreds, invalidateAppmaxCredsCache } = await import("@/lib/appmax.server");
+    const { clientId, clientSecret } = await generateAppmaxMerchantCreds(data.hash);
+
+    const { data: existing } = await supabase
+      .from("appmax_credentials")
+      .select("id")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabase
+        .from("appmax_credentials")
+        .update({ client_id: clientId, client_secret: clientSecret, updated_by: userId })
+        .eq("id", existing.id);
+      if (error) throw new Error(error.message);
+    }
+    invalidateAppmaxCredsCache();
+    return { ok: true };
   });
