@@ -41,19 +41,13 @@ export const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: "ANÁLISES",
-    items: [
-      { to: "/app/relatorios", label: "Relatórios", icon: FileBarChart2 },
-      { to: "/app/auditoria", label: "Auditoria", icon: ShieldCheck },
-      { to: "/app/importar", label: "Importar Histórico", icon: Upload },
-    ],
-  },
-
-  {
     title: "SISTEMA",
     items: [
       { to: "/app/whatsapp", label: "WhatsApp", icon: MessageCircle },
       { to: "/app/suporte", label: "Suporte", icon: LifeBuoy },
+      { to: "/app/relatorios", label: "Relatórios", icon: FileBarChart2 },
+      { to: "/app/auditoria", label: "Auditoria", icon: ShieldCheck },
+      { to: "/app/importar", label: "Importar Histórico", icon: Upload },
     ],
   },
 ];
