@@ -1369,6 +1369,25 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         }
       }
 
+      // "Me lembrar antes também" / "avisa mais cedo" logo depois de criar um
+      // compromisso: sem esse atalho caía no fluxo de "qual dia será?" como se
+      // fosse um compromisso novo sem data — confuso, já que não é isso que a
+      // pessoa quis dizer. Só dispara quando a mensagem não tem data/hora (senão
+      // é um compromisso novo de verdade) e existe um compromisso criado há
+      // pouco. Os lembretes hoje são horários fixos (3 dias antes, no dia às
+      // 9h, 4h/1h/30min antes) — não dá pra criar um horário customizado ainda,
+      // então a resposta explica o que já está programado em vez de inventar.
+      if (!handled && !isApptPending && !cmd && !nat.hasDate && !nat.hasTime) {
+        const REMINDER_FOLLOWUP_RE = /\b(lembr\w*|avis\w*)\b.{0,25}\b(antes|mais cedo|adiantad\w*)\b|\b(antes|mais cedo|adiantad\w*)\b.{0,25}\b(lembr\w*|avis\w*)\b/i;
+        if (REMINDER_FOLLOWUP_RE.test(inputText)) {
+          const recent = await appts.findRecentlyCreatedAppointment(profile.id);
+          if (recent) {
+            handled = true;
+            replyText = `Já deixei os lembretes programados pro "${recent.title}": 3 dias antes, no dia às 9h, e mais perto do horário (4h, 1h e 30min antes) ⏰`;
+          }
+        }
+      }
+
       // --- 0) Rascunho com data/hora aguardando SÓ a descrição ---
       if (!handled && pending && pending.kind === "appointment_need_title") {
         handled = true;
