@@ -311,12 +311,20 @@ export const adminReactivateSubscription = createServerFn({ method: "POST" })
       ? null
       : new Date(Date.now() + days * 86400_000).toISOString();
 
+    // Cancelamento na Appmax é permanente ("nenhuma nova cobrança será
+    // gerada" — não existe API pra "descancelar"). Reativar aqui sem tratar
+    // isso deixaria o registro mostrando "Ativo" sem nenhuma cobrança real
+    // acontecendo de novo — limpa o vínculo pra ficar claro que virou uma
+    // assinatura só manual (admin decide renovação) a partir de agora.
+    const patch: Record<string, any> = { status: "active", cancelled_at: null, ends_at: newEnds };
+    if (sub.appmax_subscription_id) {
+      patch.appmax_subscription_id = null;
+      patch.appmax_order_id = null;
+      patch.payment_method = null;
+    }
+
     const { data: row, error } = await supabaseAdmin
-      .from("subscriptions").update({
-        status: "active",
-        cancelled_at: null,
-        ends_at: newEnds,
-      }).eq("id", sub.id).select().single();
+      .from("subscriptions").update(patch).eq("id", sub.id).select().single();
     if (error) throw new Error(error.message);
 
     if (newEnds) await supabaseAdmin.from("profiles").update({ trial_ends_at: newEnds }).eq("id", sub.user_id);
