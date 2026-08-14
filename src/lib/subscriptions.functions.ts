@@ -123,6 +123,16 @@ export const adminAssignSubscription = createServerFn({ method: "POST" })
       .select().single();
     if (error) throw new Error(error.message);
 
+    // Se a pessoa já tinha uma assinatura recorrente ativa na Appmax,
+    // atribuir um plano novo por aqui não pode deixar a cobrança automática
+    // antiga rodando em paralelo sem o admin saber.
+    try {
+      const { supersedeActiveAppmaxSubscriptions } = await import("@/lib/appmax.server");
+      await supersedeActiveAppmaxSubscriptions(data.userId);
+    } catch (e) {
+      console.error("[adminAssignSubscription] falha ao verificar assinaturas Appmax anteriores", e);
+    }
+
     await supabaseAdmin.from("profiles").update({
       plan: plan.name,
       trial_ends_at: ends_at ?? new Date(now.getTime() + 365 * 10 * 86400_000).toISOString(),
@@ -192,6 +202,20 @@ export const adminCancelSubscription = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await ensureAdmin(supabase, userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: existing } = await supabaseAdmin
+      .from("subscriptions").select("appmax_subscription_id").eq("id", data.subscriptionId).maybeSingle();
+    if (existing?.appmax_subscription_id) {
+      // Sem isso, cancelar pelo admin só apaga o registro local — a Appmax
+      // continua cobrando automaticamente a assinatura, já que a criação foi
+      // feita lá e ela não sabe que cancelamos aqui.
+      try {
+        const { cancelAppmaxSubscription } = await import("@/lib/appmax.server");
+        await cancelAppmaxSubscription(existing.appmax_subscription_id);
+      } catch (e) {
+        console.error("[adminCancelSubscription] falha ao cancelar na Appmax", e);
+      }
+    }
 
     const { data: row, error } = await supabaseAdmin
       .from("subscriptions").update({

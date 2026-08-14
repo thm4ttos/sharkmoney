@@ -106,9 +106,11 @@ async function handleOrderEvent(event: string, orderId: number) {
     return;
   }
 
-  const { createAppmaxSubscription } = await import("@/lib/appmax.server");
+  const { createAppmaxSubscription, supersedeActiveAppmaxSubscriptions } = await import("@/lib/appmax.server");
   const intervalCount = Math.max(1, Math.round(plan.durationDays / 30));
   const sub = await createAppmaxSubscription({ orderId, intervalCount });
+  // Mesmo cuidado do checkout de cartão: evita duas assinaturas cobrando em paralelo.
+  await supersedeActiveAppmaxSubscriptions(intent.user_id, sub.id);
 
   const now = new Date();
   const endsAt = new Date(now.getTime() + plan.durationDays * 86400_000).toISOString();

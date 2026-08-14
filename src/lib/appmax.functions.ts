@@ -103,6 +103,12 @@ export const startCheckout = createServerFn({ method: "POST" })
       const intervalCount = Math.max(1, Math.round(plan.durationDays / 30));
       const sub = await createAppmaxSubscription({ orderId, intervalCount });
 
+      // Evita cobrança dupla em paralelo se a pessoa já tinha uma assinatura
+      // ativa (ex: upgrade de mensal pra anual) — cancela a anterior agora
+      // que a nova já foi criada com sucesso.
+      const { supersedeActiveAppmaxSubscriptions } = await import("@/lib/appmax.server");
+      await supersedeActiveAppmaxSubscriptions(userId, sub.id);
+
       const now = new Date();
       const endsAt = new Date(now.getTime() + plan.durationDays * 86400_000).toISOString();
       await supabaseAdmin.from("subscriptions").insert({

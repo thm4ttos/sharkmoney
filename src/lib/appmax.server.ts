@@ -284,3 +284,32 @@ export async function getAppmaxOrder(orderId: number): Promise<AppmaxOrder> {
 export async function getAppmaxSubscription(subscriptionId: number): Promise<AppmaxSubscription> {
   return appmaxRequest("GET", `/v1/subscriptions/${subscriptionId}`);
 }
+
+/**
+ * Cancela na Appmax e marca como `cancelled` localmente qualquer assinatura
+ * ainda `active` do usuário além da que acabou de ser criada — sem isso, um
+ * "upgrade" (ex: mensal → anual) deixaria as duas assinaturas cobrando em
+ * paralelo, já que criar uma nova nunca cancela a anterior sozinho.
+ * Best-effort: se a Appmax falhar ao cancelar, ainda marca local como
+ * cancelled (mesma lógica de cancelMySubscription) pra não deixar a pessoa
+ * presa numa assinatura fantasma no nosso lado.
+ */
+export async function supersedeActiveAppmaxSubscriptions(userId: string, keepSubscriptionId?: number): Promise<void> {
+  const { data: rows } = await supabaseAdmin
+    .from("subscriptions")
+    .select("id, appmax_subscription_id")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .not("appmax_subscription_id", "is", null);
+  for (const row of rows ?? []) {
+    if (keepSubscriptionId && row.appmax_subscription_id === keepSubscriptionId) continue;
+    try {
+      await cancelAppmaxSubscription(row.appmax_subscription_id as number);
+    } catch (e) {
+      console.error("[appmax] falha ao cancelar assinatura substituída", row.id, e);
+    }
+    await supabaseAdmin.from("subscriptions")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+      .eq("id", row.id);
+  }
+}
