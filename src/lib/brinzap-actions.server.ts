@@ -1860,7 +1860,16 @@ export function inferTransactionCategory(text: string): string {
   return inferCategoryFromText(text);
 }
 
-type BulkFinancialItem = { kind: "expense" | "income"; amount: number; category: string; description: string; occurred_at?: string };
+// Tipo estreito — usado no retorno de funções que SÓ produzem gasto/receita
+// avulsos (parseSimpleFinancialLine, detectSpontaneousExpenseIntent,
+// buildRepeatedItems). BulkFinancialItem (abaixo) é a união mais ampla, usada
+// só onde conta fixa/parcelamento realmente podem aparecer (parseInstallmentLine,
+// toBillItem, e o resultado combinado de parseSmartFinancialMessage).
+type SimpleFinancialItem = { kind: "expense" | "income"; amount: number; category: string; description: string; occurred_at?: string };
+type BulkFinancialItem =
+  | SimpleFinancialItem
+  | { kind: "bill"; amount: number; category: string; title: string; next_due_at?: string }
+  | { kind: "installment"; amount: number; category: string; title: string; installments_total: number; installments_paid: number; total_amount: number; next_due_at?: string };
 type SmartFinancialParse =
   | { ok: true; items: BulkFinancialItem[] }
   | { ok: false; replyText: string; reason: "divergence" | "missing_unit" | "ambiguous" };
@@ -1901,6 +1910,12 @@ export function moneyMatches(text: string): Array<{ amount: number; raw: string;
   let m: RegExpExecArray | null;
   MONEY_RE_GLOBAL.lastIndex = 0;
   while ((m = MONEY_RE_GLOBAL.exec(text))) {
+    // "vencem no dia 5" / "às 14h" não são valores em reais — mesma guarda já
+    // usada em parseInlineBulkProse, aplicada aqui pra cobrir TODO chamador
+    // desta função (bug real: "dia 5" virou um item de R$5,00 porque só
+    // parseInlineBulkProse tinha essa checagem, não moneyMatches).
+    const before = text.slice(Math.max(0, m.index - 25), m.index).toLowerCase();
+    if (/\bdia\s*$|\bàs?\s*$|\bhora[s]?\s*$/.test(before)) continue;
     const amount = parseMoneyBRL(m[0]);
     if (amount != null) out.push({ amount, raw: m[0], start: m.index, end: m.index + m[0].length });
   }
@@ -1981,7 +1996,7 @@ function cents(n: number): number {
   return Math.round(n * 100);
 }
 
-function buildRepeatedItems(unitRaw: string, subjectRaw: string, amounts: number[]): BulkFinancialItem[] {
+function buildRepeatedItems(unitRaw: string, subjectRaw: string, amounts: number[]): SimpleFinancialItem[] {
   const title = buildRepeatedTitle(unitRaw, subjectRaw);
   const unit = singularUnit(unitRaw);
   const category = inferCategoryFromText(`${title} ${unitRaw}`);
@@ -2049,7 +2064,7 @@ function normalizeListLine(line: string): string {
   return line.trim().replace(/^[\s•\-*🔹·▪️–—]*(?:\d+[).:-]\s*)?/, "").trim();
 }
 
-function parseSimpleFinancialLine(line: string): BulkFinancialItem | null {
+function parseSimpleFinancialLine(line: string): SimpleFinancialItem | null {
   const clean = normalizeListLine(line);
   if (!clean || HEADER_LINE_RE.test(clean)) return null;
 
@@ -2102,7 +2117,7 @@ function parseSimpleFinancialLine(line: string): BulkFinancialItem | null {
 const SPONTANEOUS_EXPENSE_VERBS = /\b(gastei|gasto|paguei|comprei|compro|adquiri|abasteci|almocei|jantei|torrei|investi|assinei|renovei|contratei|desembolsei|peguei|passei|coloquei|reforcei|refor[çc]ei|saiu|transferi|mandei\s+um\s+pix|fiz\s+um\s+pix|fiz\s+(?:mercado|feira|compras?|abastecimento|uma\s+compra|um\s+pagamento)|passei\s+no\s+cart[ãa]o|coloquei\s+cr[ée]dito|dei\s+entrada|paguei\s+uma\s+conta)\b/i;
 const SPONTANEOUS_INCOME_VERBS = /\b(recebi|ganhei|entrou|caiu|caiu\s+um\s+pix|caiu\s+na\s+conta|pingou|pinguei|recebido|sal[áa]rio|freela|pix\s+recebido|renda|comiss[ãa]o|cliente\s+pagou|fiz\s+uma\s+venda|entrou\s+comiss[ãa]o|entrou\s+pagamento)\b/i;
 
-export function detectSpontaneousExpenseIntent(input: string): BulkFinancialItem | null {
+export function detectSpontaneousExpenseIntent(input: string): SimpleFinancialItem | null {
   if (!input) return null;
   const raw = input.trim();
   if (raw.length < 3) return null;
@@ -2161,6 +2176,72 @@ export function detectSpontaneousExpenseIntent(input: string): BulkFinancialItem
 }
 
 
+// Mensagens em lote pra cadastrar contas fixas/parceladas (não gastos) trazem
+// uma linha de cabeçalho com contexto compartilhado — "Todas as contas abaixo
+// vencem no dia 5, são todas fixas" — que vale pra lista inteira: dia de
+// vencimento padrão + "isso aqui é cadastro de conta fixa, não gasto avulso".
+// Bug real que isso corrige: sem esse contexto, cada linha virava uma
+// transação avulsa (kind=expense) em vez de uma conta fixa/parcelamento, e o
+// próprio cabeçalho ("dia 5") virava um item fantasma de R$5,00.
+type BatchBillContext = { dueDay: number | null; defaultKind: "bill" | "installment" | null };
+const FIXED_SIGNAL_RE = /\bs[ãa]o\s+(?:todas\s+)?fixas?\b|\btodas\s+fixas?\b/i;
+const INSTALLMENT_SIGNAL_RE = /\bs[ãa]o\s+(?:todas\s+)?parcelad[ao]s?\b|\btodas\s+parcelad[ao]s?\b/i;
+const DUE_DAY_CONTEXT_RE = /\bvence[m]?\b[^\d]{0,20}\bdia\s+(\d{1,2})\b|\bdia\s+(\d{1,2})\b[^\d]{0,20}\bvence/i;
+
+function detectBatchBillContext(rawLines: string[]): BatchBillContext {
+  const joined = rawLines.join(" ");
+  let dueDay: number | null = null;
+  const dueMatch = joined.match(DUE_DAY_CONTEXT_RE);
+  if (dueMatch) {
+    const d = Number(dueMatch[1] ?? dueMatch[2]);
+    if (d >= 1 && d <= 31) dueDay = d;
+  }
+  const defaultKind: "bill" | "installment" | null = FIXED_SIGNAL_RE.test(joined)
+    ? "bill"
+    : INSTALLMENT_SIGNAL_RE.test(joined) ? "installment" : null;
+  return { dueDay, defaultKind };
+}
+
+// "Parcela 7/10 Consórcio Brenna — R$ 100,00" — nunca passa pelo moneyMatches
+// genérico (o "7" e o "10" seriam lidos como valores em reais também); tem
+// regex própria pra extrair parcela atual, total e valor por parcela.
+const INSTALLMENT_LINE_RE = /^parcelas?\s+(\d{1,3})\s*\/\s*(\d{1,3})\s+(.+?)\s*[—–-]\s*r?\$?\s*([\d.,]+)\s*$/i;
+
+function parseInstallmentLine(line: string, contextDueDay: number | null): BulkFinancialItem | null {
+  const m = line.match(INSTALLMENT_LINE_RE);
+  if (!m) return null;
+  const current = Number(m[1]);
+  const total = Number(m[2]);
+  const title = titleCasePT(m[3].trim()).slice(0, 60);
+  const amount = parseMoneyBRL(m[4]);
+  if (!title || !(total >= 1) || !(current >= 1) || current > total || amount == null || !(amount > 0)) return null;
+  return {
+    kind: "installment",
+    amount,
+    category: inferCategoryFromText(title),
+    title,
+    installments_total: total,
+    installments_paid: Math.max(0, current - 1),
+    total_amount: Math.round(amount * total * 100) / 100,
+    next_due_at: contextDueDay ? nextDueFromDay(contextDueDay) : undefined,
+  };
+}
+
+// Relabela um item já parseado como gasto avulso pra conta fixa, quando o
+// cabeçalho da lista já deixou claro que esses itens são contas fixas —
+// reaproveita a extração de descrição/categoria de parseSimpleFinancialLine
+// em vez de duplicar essa lógica.
+function toBillItem(item: BulkFinancialItem, contextDueDay: number | null): BulkFinancialItem {
+  if (item.kind !== "expense" && item.kind !== "income") return item;
+  return {
+    kind: "bill",
+    amount: item.amount,
+    category: item.category,
+    title: item.description,
+    next_due_at: contextDueDay ? nextDueFromDay(contextDueDay) : undefined,
+  };
+}
+
 export function parseSmartFinancialMessage(input: string): SmartFinancialParse | null {
   if (!input || input.trim().length < 6) return null;
   const rawLines = input.split(/\r?\n|;/g).map((l) => l.trim()).filter(Boolean);
@@ -2168,9 +2249,12 @@ export function parseSmartFinancialMessage(input: string): SmartFinancialParse |
   let skipped = 0;
 
   if (rawLines.length >= 2) {
+    const batchCtx = detectBatchBillContext(rawLines);
     for (const line of rawLines) {
       const normalized = normalizeListLine(line);
       if (!normalized || HEADER_LINE_RE.test(normalized)) continue;
+      const installmentItem = parseInstallmentLine(normalized, batchCtx.dueDay);
+      if (installmentItem) { lineItems.push(installmentItem); continue; }
       const repeated = parseRepeatedUnitSegment(normalized);
       if (repeated) {
         if (!repeated.ok) return repeated;
@@ -2178,7 +2262,7 @@ export function parseSmartFinancialMessage(input: string): SmartFinancialParse |
         continue;
       }
       const simple = parseSimpleFinancialLine(normalized);
-      if (simple) lineItems.push(simple);
+      if (simple) lineItems.push(batchCtx.defaultKind === "bill" ? toBillItem(simple, batchCtx.dueDay) : simple);
       else skipped++;
     }
     if (lineItems.length >= 2 && skipped <= Math.max(2, lineItems.length)) return { ok: true, items: lineItems };
@@ -2190,32 +2274,6 @@ export function parseSmartFinancialMessage(input: string): SmartFinancialParse |
   const inline = parseInlineBulkProse(input);
   if (inline && inline.length >= 2) return { ok: true, items: inline };
   return null;
-}
-
-// Parser determinístico para listas multi-linhas tipo:
-//   "Água - R$ 100,00"
-//   "Internet 150"
-//   "• Aluguel — 800,00"
-// Retorna items prontos para processBulk, ou null se o texto não parece lista.
-export function parseBulkLines(input: string): Array<{ kind: "expense" | "income"; amount: number; category: string; description: string; occurred_at?: string }> | null {
-  if (!input) return null;
-  const rawLines = input.split(/\r?\n|;/g).map((l) => l.trim()).filter(Boolean);
-  if (rawLines.length < 2) return null;
-
-  const items: Array<{ kind: "expense" | "income"; amount: number; category: string; description: string; occurred_at?: string }> = [];
-  let skipped = 0;
-
-  for (const line of rawLines) {
-    const repeated = parseRepeatedUnitSegment(line);
-    if (repeated?.ok) { items.push(...repeated.items); continue; }
-    const item = parseSimpleFinancialLine(line);
-    if (item) items.push(item);
-    else if (!HEADER_LINE_RE.test(line)) skipped++;
-  }
-
-  if (items.length < 2) return null;
-  if (skipped > items.length) return null;
-  return items;
 }
 
 // Parser determinístico para PROSA INLINE com múltiplos valores:
@@ -2511,7 +2569,7 @@ export async function processBulk(
           break;
         }
         case "installment": {
-          const r = await recordInstallment(userId, { title: it.title ?? it.description, amount: it.amount, installments_total: it.installments_total, installments_paid: it.installments_paid, total_amount: it.total_amount });
+          const r = await recordInstallment(userId, { title: it.title ?? it.description, amount: it.amount, installments_total: it.installments_total, installments_paid: it.installments_paid, total_amount: it.total_amount, next_due_at: it.next_due_at });
           if (r.ok) created.push({ kind: "installment", title: it.title ?? it.description, amount: it.amount }); else failed++;
           break;
         }
