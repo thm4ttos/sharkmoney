@@ -13,7 +13,7 @@ import {
   ArrowDownRight, Plus, CalendarRange, Sparkles, Ban,
 } from "lucide-react";
 import { getMySubscription, getMySubscriptionHistory } from "@/lib/subscriptions.functions";
-import { cancelMySubscription } from "@/lib/appmax.functions";
+import { cancelMySubscription } from "@/lib/mercadopago.functions";
 import { getPlan } from "@/lib/plans";
 import {
   getProfileOverview, updateMyProfile, signOutAllSessions, exportMyData,
@@ -817,7 +817,7 @@ function SubscriptionCard() {
         );
       })()}
 
-      {!isCancelled && !isExpired && sub.appmax_subscription_id ? (
+      {!isCancelled && !isExpired && sub.mp_preapproval_id ? (
         <div className="mt-3 flex items-center justify-end">
           {confirmingCancel ? (
             <div className="flex items-center gap-2 text-xs">

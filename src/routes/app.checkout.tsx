@@ -1,11 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowLeft, CreditCard, QrCode, ShieldCheck, Loader2, CheckCircle2, XCircle, Copy } from "lucide-react";
+import { ArrowLeft, CreditCard, ShieldCheck, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { getPlan, subscriptionPlans, monthlyEquivalent, savings, brl, type SubscriptionPlanId } from "@/lib/plans";
-import { startCheckout, getMyCheckoutIntent, getAppmaxPublicConfig } from "@/lib/appmax.functions";
+import { startCheckout, getMyCheckoutIntent, getMercadoPagoPublicConfig } from "@/lib/mercadopago.functions";
 
 const PLAN_IDS_SET = new Set(subscriptionPlans.map((p) => p.id));
 
@@ -18,109 +18,69 @@ export const Route = createFileRoute("/app/checkout")({
 });
 
 declare global {
-  interface Window { AppmaxScripts?: { init: (...args: any[]) => void } }
+  interface Window {
+    MercadoPago?: new (publicKey: string, opts?: { locale?: string }) => {
+      createCardToken: (params: Record<string, string>) => Promise<{ id: string }>;
+    };
+  }
 }
 
-const APPMAX_SCRIPT_SRC = "https://scripts.appmax.com.br/appmax.min.js";
-
-/** `appmax-form-element` não é um atributo `data-*` — o Appmax.js exige esse nome exato pra tokenizar o campo. */
-function appmaxField(name: "number" | "holder_name" | "expiration_month" | "expiration_year" | "cvv") {
-  return { "appmax-form-element": name } as Record<string, string>;
-}
+const MP_SCRIPT_SRC = "https://sdk.mercadopago.com/js/v2";
 
 function Page() {
   const { plan: planSlug } = Route.useSearch();
   const navigate = useNavigate();
   const plan = getPlan(planSlug) ?? subscriptionPlans[0];
 
-  const [method, setMethod] = useState<"credit_card" | "pix">("credit_card");
+  const [cardNumber, setCardNumber] = useState("");
+  const [holderName, setHolderName] = useState("");
+  const [expMonth, setExpMonth] = useState("");
+  const [expYear, setExpYear] = useState("");
+  const [cvv, setCvv] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");
-  const [installments, setInstallments] = useState(1);
   const [scriptReady, setScriptReady] = useState(false);
   const [scriptError, setScriptError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ status: "completed" | "failed" | "pending"; reason?: string } | null>(null);
-  const [pix, setPix] = useState<{ qr: string | null; emv: string | null; intentId: string } | null>(null);
-  const formRef = useRef<HTMLFormElement>(null);
+  const [pendingIntentId, setPendingIntentId] = useState<string | null>(null);
 
-  // Trocar de plano no meio do fluxo cancela qualquer Pix pendente/erro em
-  // exibição — evita mostrar um QR code ou erro que já não é do plano atual.
+  // Trocar de plano no meio do fluxo limpa qualquer erro/resultado em exibição.
   useEffect(() => {
-    setPix(null);
     setResult(null);
     setError("");
+    setPendingIntentId(null);
   }, [planSlug]);
 
-  const runConfig = useServerFn(getAppmaxPublicConfig);
+  const runConfig = useServerFn(getMercadoPagoPublicConfig);
   const runCheckout = useServerFn(startCheckout);
   const runIntent = useServerFn(getMyCheckoutIntent);
 
-  const config = useQuery({ queryKey: ["appmax-public-config"], queryFn: () => runConfig() as any });
+  const config = useQuery({ queryKey: ["mercadopago-public-config"], queryFn: () => runConfig() as any });
 
-  // Carrega o Appmax.js só quando precisa (pagamento por cartão) e só uma vez.
+  // Carrega o SDK JS do Mercado Pago só uma vez, assim que a public key estiver disponível.
   useEffect(() => {
-    if (method !== "credit_card" || !config.data?.externalId) return;
-    if (window.AppmaxScripts) { setScriptReady(true); return; }
-    const existing = document.querySelector(`script[src="${APPMAX_SCRIPT_SRC}"]`);
+    if (!config.data?.publicKey) return;
+    if (window.MercadoPago) { setScriptReady(true); return; }
+    const existing = document.querySelector(`script[src="${MP_SCRIPT_SRC}"]`);
     if (existing) {
       existing.addEventListener("load", () => setScriptReady(true));
       return;
     }
     const script = document.createElement("script");
-    script.src = APPMAX_SCRIPT_SRC;
+    script.src = MP_SCRIPT_SRC;
     script.async = true;
     script.onload = () => setScriptReady(true);
-    script.onerror = () => setScriptError("Não foi possível carregar o formulário de cartão. Tente Pix ou recarregue a página.");
+    script.onerror = () => setScriptError("Não foi possível carregar o formulário de cartão. Recarregue a página e tente de novo.");
     document.body.appendChild(script);
-  }, [method, config.data?.externalId]);
+  }, [config.data?.publicKey]);
 
-  // Inicializa o SDK assim que o script + externalId estiverem prontos.
-  useEffect(() => {
-    if (!scriptReady || !window.AppmaxScripts || !config.data?.externalId) return;
-    window.AppmaxScripts.init(
-      async (payload: { token: string }) => {
-        await finishCardCheckout(payload.token);
-      },
-      (err: any) => {
-        setSubmitting(false);
-        setError(err?.message || "Cartão recusado ou dados inválidos. Confira e tente de novo.");
-      },
-      config.data.externalId,
-    );
-  }, [scriptReady, config.data?.externalId]);
-
-  async function finishCardCheckout(cardToken: string) {
-    try {
-      const res = await runCheckout({
-        data: { planSlug: plan.slug, paymentMethod: "credit_card", document: documentNumber, cardToken, installments },
-      }) as any;
-      setResult({ status: res.status, reason: res.reason });
-    } catch (e: any) {
-      setError(e?.message ?? "Falha ao processar o pagamento.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const mPix = useMutation({
-    mutationFn: async () => {
-      const res = await runCheckout({
-        data: { planSlug: plan.slug, paymentMethod: "pix", document: documentNumber },
-      }) as any;
-      return res;
-    },
-    onSuccess: (res) => {
-      setPix({ qr: res.pixQrCode, emv: res.pixEmv, intentId: res.intentId });
-    },
-    onError: (e: any) => setError(e?.message ?? "Falha ao gerar o Pix."),
-  });
-
-  // Enquanto espera a confirmação do Pix, faz polling simples do status.
+  // Enquanto espera a confirmação assíncrona (assinatura ficou "pending" no
+  // Mercado Pago), faz polling simples do status via checkout_intents.
   const intentStatus = useQuery({
-    queryKey: ["checkout-intent", pix?.intentId],
-    queryFn: () => runIntent({ data: { intentId: pix!.intentId } }) as any,
-    enabled: !!pix?.intentId,
+    queryKey: ["checkout-intent", pendingIntentId],
+    queryFn: () => runIntent({ data: { intentId: pendingIntentId! } }) as any,
+    enabled: !!pendingIntentId,
     refetchInterval: (q) => (q.state.data?.status === "pending" ? 4000 : false),
   });
   useEffect(() => {
@@ -129,22 +89,55 @@ function Page() {
     }
   }, [intentStatus.data?.status]);
 
-  const submitCard = (e: React.FormEvent) => {
+  const submitCard = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!documentNumber.trim()) { setError("Informe seu CPF."); return; }
-    if (!scriptReady) { setError("O formulário de cartão ainda está carregando, aguarde um instante."); return; }
+    const doc = documentNumber.replace(/\D/g, "");
+    if (doc.length !== 11) { setError("Informe um CPF válido."); return; }
+    if (!scriptReady || !config.data?.publicKey || !window.MercadoPago) {
+      setError("O formulário de cartão ainda está carregando, aguarde um instante.");
+      return;
+    }
     setSubmitting(true);
-    // O Appmax.js intercepta este submit (form[data-appmax-checkout]),
-    // tokeniza os campos [appmax-form-element] e chama o callback onSuccess
-    // do init() acima — que então dispara finishCardCheckout().
-    formRef.current?.requestSubmit();
+    try {
+      const mp = new window.MercadoPago(config.data.publicKey, { locale: "pt-BR" });
+      // Tokenização acontece aqui, no navegador — o servidor do Abio nunca
+      // recebe número de cartão/CVV, só o token já gerado.
+      const cardToken = await mp.createCardToken({
+        cardNumber: cardNumber.replace(/\s/g, ""),
+        cardholderName: holderName.trim(),
+        cardExpirationMonth: expMonth.trim(),
+        cardExpirationYear: expYear.trim(),
+        securityCode: cvv.trim(),
+        identificationType: "CPF",
+        identificationNumber: doc,
+      });
+      const res = await runCheckout({ data: { planSlug: plan.slug, cardToken: cardToken.id } }) as any;
+      if (res.status === "pending") setPendingIntentId(res.intentId);
+      else setResult({ status: res.status, reason: res.reason });
+    } catch (e: any) {
+      setError(e?.message || "Cartão recusado ou dados inválidos. Confira e tente de novo.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (result) {
     return (
       <div className="max-w-lg mx-auto">
         <ResultCard result={result} plan={plan} />
+      </div>
+    );
+  }
+
+  if (pendingIntentId) {
+    return (
+      <div className="max-w-lg mx-auto">
+        <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-8 text-center space-y-3">
+          <Loader2 className="h-10 w-10 animate-spin mx-auto text-primary" />
+          <h1 className="font-display text-2xl">Confirmando pagamento...</h1>
+          <p className="text-sm text-muted-foreground">Isso pode levar alguns segundos.</p>
+        </div>
       </div>
     );
   }
@@ -189,104 +182,52 @@ function Page() {
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setMethod("credit_card")}
-            className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition-smooth ${method === "credit_card" ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-background/40"}`}>
-            <CreditCard className="h-4 w-4" /> Cartão
-          </button>
-          <button type="button" onClick={() => setMethod("pix")}
-            className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition-smooth ${method === "pix" ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-background/40"}`}>
-            <QrCode className="h-4 w-4" /> Pix
-          </button>
+        <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <CreditCard className="h-4 w-4" /> Cobrança automática no cartão
         </div>
 
-        <div>
-          <label className="text-xs text-muted-foreground">CPF do titular</label>
-          <input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)}
-            placeholder="000.000.000-00" inputMode="numeric"
-            className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
-        </div>
-
-        {method === "credit_card" ? (
-          !pix ? (
-            <form ref={formRef} data-appmax-checkout onSubmit={submitCard} className="space-y-3">
-              <div>
-                <label className="text-xs text-muted-foreground">Número do cartão</label>
-                <input {...appmaxField("number")} placeholder="0000 0000 0000 0000"
-                  className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Nome no cartão</label>
-                <input {...appmaxField("holder_name")} placeholder="Como está impresso no cartão"
-                  className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <input {...appmaxField("expiration_month")} placeholder="MM"
-                  className="bg-input rounded-xl px-3 py-2.5 text-sm" />
-                <input {...appmaxField("expiration_year")} placeholder="AAAA"
-                  className="bg-input rounded-xl px-3 py-2.5 text-sm" />
-                <input {...appmaxField("cvv")} placeholder="CVV"
-                  className="bg-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              {plan.billing === "one_time" && (
-                <div>
-                  <label className="text-xs text-muted-foreground">Parcelas</label>
-                  <select value={installments} onChange={(e) => setInstallments(Number(e.target.value))}
-                    className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm">
-                    {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}x</option>)}
-                  </select>
-                </div>
-              )}
-
-              {scriptError && <p className="text-xs text-destructive">{scriptError}</p>}
-              {error && <p className="text-xs text-destructive">{error}</p>}
-
-              <button type="submit" disabled={submitting || !scriptReady}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground py-2.5 text-sm glow-neon disabled:opacity-50">
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                {submitting ? "Processando..." : !scriptReady ? "Carregando formulário seguro..." : `Assinar ${brl(plan.totalPrice)}`}
-              </button>
-            </form>
-          ) : null
-        ) : !pix ? (
-          <div className="space-y-3">
-            {error && <p className="text-xs text-destructive">{error}</p>}
-            <button onClick={() => mPix.mutate()} disabled={mPix.isPending || !documentNumber.trim()}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground py-2.5 text-sm glow-neon disabled:opacity-50">
-              {mPix.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-              {mPix.isPending ? "Gerando Pix..." : `Gerar Pix de ${brl(plan.totalPrice)}`}
-            </button>
+        <form onSubmit={submitCard} className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground">CPF do titular</label>
+            <input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)}
+              placeholder="000.000.000-00" inputMode="numeric"
+              className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
           </div>
-        ) : (
-          <PixPending pix={pix} />
-        )}
+          <div>
+            <label className="text-xs text-muted-foreground">Número do cartão</label>
+            <input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)}
+              placeholder="0000 0000 0000 0000" inputMode="numeric"
+              className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Nome no cartão</label>
+            <input value={holderName} onChange={(e) => setHolderName(e.target.value)}
+              placeholder="Como está impresso no cartão"
+              className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <input value={expMonth} onChange={(e) => setExpMonth(e.target.value)} placeholder="MM" inputMode="numeric"
+              className="bg-input rounded-xl px-3 py-2.5 text-sm" />
+            <input value={expYear} onChange={(e) => setExpYear(e.target.value)} placeholder="AAAA" inputMode="numeric"
+              className="bg-input rounded-xl px-3 py-2.5 text-sm" />
+            <input value={cvv} onChange={(e) => setCvv(e.target.value)} placeholder="CVV" inputMode="numeric"
+              className="bg-input rounded-xl px-3 py-2.5 text-sm" />
+          </div>
+
+          {scriptError && <p className="text-xs text-destructive">{scriptError}</p>}
+          {error && <p className="text-xs text-destructive">{error}</p>}
+
+          <button type="submit" disabled={submitting || !scriptReady}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground py-2.5 text-sm glow-neon disabled:opacity-50">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+            {submitting ? "Processando..." : !scriptReady ? "Carregando formulário seguro..." : `Assinar ${brl(plan.totalPrice)}`}
+          </button>
+        </form>
 
         <p className="text-[11px] text-muted-foreground text-center flex items-center justify-center gap-1.5">
-          <ShieldCheck className="h-3.5 w-3.5" /> Pagamento processado com segurança pela Appmax. Seus dados de cartão nunca passam pelos servidores do Abio.
+          <ShieldCheck className="h-3.5 w-3.5" /> Pagamento processado com segurança pelo Mercado Pago. Seus dados de cartão nunca passam pelos servidores do Abio.
         </p>
       </div>
-    </div>
-  );
-}
-
-function PixPending({ pix }: { pix: { qr: string | null; emv: string | null } }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="space-y-3 text-center">
-      {pix.qr ? (
-        <img src={`data:image/png;base64,${pix.qr}`} alt="QR Code Pix" className="mx-auto rounded-xl border border-border w-48 h-48 object-contain bg-white p-2" />
-      ) : null}
-      {pix.emv ? (
-        <button
-          onClick={() => { navigator.clipboard.writeText(pix.emv!); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm hover:bg-background/40"
-        >
-          <Copy className="h-4 w-4" /> {copied ? "Copiado!" : "Copiar código Pix"}
-        </button>
-      ) : null}
-      <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Aguardando confirmação do pagamento...
-      </p>
     </div>
   );
 }

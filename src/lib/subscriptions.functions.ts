@@ -123,14 +123,14 @@ export const adminAssignSubscription = createServerFn({ method: "POST" })
       .select().single();
     if (error) throw new Error(error.message);
 
-    // Se a pessoa já tinha uma assinatura recorrente ativa na Appmax,
+    // Se a pessoa já tinha uma assinatura recorrente ativa no Mercado Pago,
     // atribuir um plano novo por aqui não pode deixar a cobrança automática
     // antiga rodando em paralelo sem o admin saber.
     try {
-      const { supersedeActiveAppmaxSubscriptions } = await import("@/lib/appmax.server");
-      await supersedeActiveAppmaxSubscriptions(data.userId);
+      const { supersedeActiveMercadoPagoSubscriptions } = await import("@/lib/mercadopago.server");
+      await supersedeActiveMercadoPagoSubscriptions(data.userId);
     } catch (e) {
-      console.error("[adminAssignSubscription] falha ao verificar assinaturas Appmax anteriores", e);
+      console.error("[adminAssignSubscription] falha ao verificar assinaturas Mercado Pago anteriores", e);
     }
 
     await supabaseAdmin.from("profiles").update({
@@ -204,16 +204,16 @@ export const adminCancelSubscription = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: existing } = await supabaseAdmin
-      .from("subscriptions").select("appmax_subscription_id").eq("id", data.subscriptionId).maybeSingle();
-    if (existing?.appmax_subscription_id) {
-      // Sem isso, cancelar pelo admin só apaga o registro local — a Appmax
-      // continua cobrando automaticamente a assinatura, já que a criação foi
-      // feita lá e ela não sabe que cancelamos aqui.
+      .from("subscriptions").select("mp_preapproval_id").eq("id", data.subscriptionId).maybeSingle();
+    if (existing?.mp_preapproval_id) {
+      // Sem isso, cancelar pelo admin só apaga o registro local — o Mercado
+      // Pago continua cobrando automaticamente a assinatura, já que a
+      // criação foi feita lá e ele não sabe que cancelamos aqui.
       try {
-        const { cancelAppmaxSubscription } = await import("@/lib/appmax.server");
-        await cancelAppmaxSubscription(existing.appmax_subscription_id);
+        const { cancelMercadoPagoSubscription } = await import("@/lib/mercadopago.server");
+        await cancelMercadoPagoSubscription(existing.mp_preapproval_id);
       } catch (e) {
-        console.error("[adminCancelSubscription] falha ao cancelar na Appmax", e);
+        console.error("[adminCancelSubscription] falha ao cancelar no Mercado Pago", e);
       }
     }
 
@@ -311,15 +311,14 @@ export const adminReactivateSubscription = createServerFn({ method: "POST" })
       ? null
       : new Date(Date.now() + days * 86400_000).toISOString();
 
-    // Cancelamento na Appmax é permanente ("nenhuma nova cobrança será
-    // gerada" — não existe API pra "descancelar"). Reativar aqui sem tratar
+    // Cancelamento no Mercado Pago é permanente (não existe API pra
+    // "descancelar" uma preapproval cancelada). Reativar aqui sem tratar
     // isso deixaria o registro mostrando "Ativo" sem nenhuma cobrança real
     // acontecendo de novo — limpa o vínculo pra ficar claro que virou uma
     // assinatura só manual (admin decide renovação) a partir de agora.
     const patch: Record<string, any> = { status: "active", cancelled_at: null, ends_at: newEnds };
-    if (sub.appmax_subscription_id) {
-      patch.appmax_subscription_id = null;
-      patch.appmax_order_id = null;
+    if (sub.mp_preapproval_id) {
+      patch.mp_preapproval_id = null;
       patch.payment_method = null;
     }
 

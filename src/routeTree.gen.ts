@@ -64,12 +64,11 @@ import { Route as ApiPublicHooksWaReprocessRouteImport } from './routes/api/publ
 import { Route as ApiPublicHooksWaProcessRouteImport } from './routes/api/public/hooks/wa-process'
 import { Route as ApiPublicHooksWaBroadcastProcessRouteImport } from './routes/api/public/hooks/wa-broadcast-process'
 import { Route as ApiPublicHooksReengagementRouteImport } from './routes/api/public/hooks/reengagement'
+import { Route as ApiPublicHooksMercadopagoWebhookRouteImport } from './routes/api/public/hooks/mercadopago-webhook'
 import { Route as ApiPublicHooksInstallmentRemindersRouteImport } from './routes/api/public/hooks/installment-reminders'
 import { Route as ApiPublicHooksBillRemindersRouteImport } from './routes/api/public/hooks/bill-reminders'
 import { Route as ApiPublicHooksBillPaymentCheckRouteImport } from './routes/api/public/hooks/bill-payment-check'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
-import { Route as ApiPublicHooksAppmaxWebhookRouteImport } from './routes/api/public/hooks/appmax-webhook'
-import { Route as ApiPublicHooksAppmaxHealthRouteImport } from './routes/api/public/hooks/appmax-health'
 import { Route as ApiPublicAffiliateTrackRouteImport } from './routes/api/public/affiliate/track'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -351,6 +350,12 @@ const ApiPublicHooksReengagementRoute =
     path: '/api/public/hooks/reengagement',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksMercadopagoWebhookRoute =
+  ApiPublicHooksMercadopagoWebhookRouteImport.update({
+    id: '/api/public/hooks/mercadopago-webhook',
+    path: '/api/public/hooks/mercadopago-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksInstallmentRemindersRoute =
   ApiPublicHooksInstallmentRemindersRouteImport.update({
     id: '/api/public/hooks/installment-reminders',
@@ -373,18 +378,6 @@ const ApiPublicHooksAppointmentRemindersRoute =
   ApiPublicHooksAppointmentRemindersRouteImport.update({
     id: '/api/public/hooks/appointment-reminders',
     path: '/api/public/hooks/appointment-reminders',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicHooksAppmaxWebhookRoute =
-  ApiPublicHooksAppmaxWebhookRouteImport.update({
-    id: '/api/public/hooks/appmax-webhook',
-    path: '/api/public/hooks/appmax-webhook',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicHooksAppmaxHealthRoute =
-  ApiPublicHooksAppmaxHealthRouteImport.update({
-    id: '/api/public/hooks/appmax-health',
-    path: '/api/public/hooks/appmax-health',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicAffiliateTrackRoute = ApiPublicAffiliateTrackRouteImport.update({
@@ -445,12 +438,11 @@ export interface FileRoutesByFullPath {
   '/api/public/whatsapp': typeof ApiPublicWhatsappRoute
   '/api/public/zapi-setup': typeof ApiPublicZapiSetupRoute
   '/api/public/affiliate/track': typeof ApiPublicAffiliateTrackRoute
-  '/api/public/hooks/appmax-health': typeof ApiPublicHooksAppmaxHealthRoute
-  '/api/public/hooks/appmax-webhook': typeof ApiPublicHooksAppmaxWebhookRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/bill-payment-check': typeof ApiPublicHooksBillPaymentCheckRoute
   '/api/public/hooks/bill-reminders': typeof ApiPublicHooksBillRemindersRoute
   '/api/public/hooks/installment-reminders': typeof ApiPublicHooksInstallmentRemindersRoute
+  '/api/public/hooks/mercadopago-webhook': typeof ApiPublicHooksMercadopagoWebhookRoute
   '/api/public/hooks/reengagement': typeof ApiPublicHooksReengagementRoute
   '/api/public/hooks/wa-broadcast-process': typeof ApiPublicHooksWaBroadcastProcessRoute
   '/api/public/hooks/wa-process': typeof ApiPublicHooksWaProcessRoute
@@ -507,12 +499,11 @@ export interface FileRoutesByTo {
   '/api/public/whatsapp': typeof ApiPublicWhatsappRoute
   '/api/public/zapi-setup': typeof ApiPublicZapiSetupRoute
   '/api/public/affiliate/track': typeof ApiPublicAffiliateTrackRoute
-  '/api/public/hooks/appmax-health': typeof ApiPublicHooksAppmaxHealthRoute
-  '/api/public/hooks/appmax-webhook': typeof ApiPublicHooksAppmaxWebhookRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/bill-payment-check': typeof ApiPublicHooksBillPaymentCheckRoute
   '/api/public/hooks/bill-reminders': typeof ApiPublicHooksBillRemindersRoute
   '/api/public/hooks/installment-reminders': typeof ApiPublicHooksInstallmentRemindersRoute
+  '/api/public/hooks/mercadopago-webhook': typeof ApiPublicHooksMercadopagoWebhookRoute
   '/api/public/hooks/reengagement': typeof ApiPublicHooksReengagementRoute
   '/api/public/hooks/wa-broadcast-process': typeof ApiPublicHooksWaBroadcastProcessRoute
   '/api/public/hooks/wa-process': typeof ApiPublicHooksWaProcessRoute
@@ -572,12 +563,11 @@ export interface FileRoutesById {
   '/api/public/whatsapp': typeof ApiPublicWhatsappRoute
   '/api/public/zapi-setup': typeof ApiPublicZapiSetupRoute
   '/api/public/affiliate/track': typeof ApiPublicAffiliateTrackRoute
-  '/api/public/hooks/appmax-health': typeof ApiPublicHooksAppmaxHealthRoute
-  '/api/public/hooks/appmax-webhook': typeof ApiPublicHooksAppmaxWebhookRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/bill-payment-check': typeof ApiPublicHooksBillPaymentCheckRoute
   '/api/public/hooks/bill-reminders': typeof ApiPublicHooksBillRemindersRoute
   '/api/public/hooks/installment-reminders': typeof ApiPublicHooksInstallmentRemindersRoute
+  '/api/public/hooks/mercadopago-webhook': typeof ApiPublicHooksMercadopagoWebhookRoute
   '/api/public/hooks/reengagement': typeof ApiPublicHooksReengagementRoute
   '/api/public/hooks/wa-broadcast-process': typeof ApiPublicHooksWaBroadcastProcessRoute
   '/api/public/hooks/wa-process': typeof ApiPublicHooksWaProcessRoute
@@ -638,12 +628,11 @@ export interface FileRouteTypes {
     | '/api/public/whatsapp'
     | '/api/public/zapi-setup'
     | '/api/public/affiliate/track'
-    | '/api/public/hooks/appmax-health'
-    | '/api/public/hooks/appmax-webhook'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/bill-payment-check'
     | '/api/public/hooks/bill-reminders'
     | '/api/public/hooks/installment-reminders'
+    | '/api/public/hooks/mercadopago-webhook'
     | '/api/public/hooks/reengagement'
     | '/api/public/hooks/wa-broadcast-process'
     | '/api/public/hooks/wa-process'
@@ -700,12 +689,11 @@ export interface FileRouteTypes {
     | '/api/public/whatsapp'
     | '/api/public/zapi-setup'
     | '/api/public/affiliate/track'
-    | '/api/public/hooks/appmax-health'
-    | '/api/public/hooks/appmax-webhook'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/bill-payment-check'
     | '/api/public/hooks/bill-reminders'
     | '/api/public/hooks/installment-reminders'
+    | '/api/public/hooks/mercadopago-webhook'
     | '/api/public/hooks/reengagement'
     | '/api/public/hooks/wa-broadcast-process'
     | '/api/public/hooks/wa-process'
@@ -764,12 +752,11 @@ export interface FileRouteTypes {
     | '/api/public/whatsapp'
     | '/api/public/zapi-setup'
     | '/api/public/affiliate/track'
-    | '/api/public/hooks/appmax-health'
-    | '/api/public/hooks/appmax-webhook'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/bill-payment-check'
     | '/api/public/hooks/bill-reminders'
     | '/api/public/hooks/installment-reminders'
+    | '/api/public/hooks/mercadopago-webhook'
     | '/api/public/hooks/reengagement'
     | '/api/public/hooks/wa-broadcast-process'
     | '/api/public/hooks/wa-process'
@@ -790,12 +777,11 @@ export interface RootRouteChildren {
   ApiPublicWhatsappRoute: typeof ApiPublicWhatsappRoute
   ApiPublicZapiSetupRoute: typeof ApiPublicZapiSetupRoute
   ApiPublicAffiliateTrackRoute: typeof ApiPublicAffiliateTrackRoute
-  ApiPublicHooksAppmaxHealthRoute: typeof ApiPublicHooksAppmaxHealthRoute
-  ApiPublicHooksAppmaxWebhookRoute: typeof ApiPublicHooksAppmaxWebhookRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksBillPaymentCheckRoute: typeof ApiPublicHooksBillPaymentCheckRoute
   ApiPublicHooksBillRemindersRoute: typeof ApiPublicHooksBillRemindersRoute
   ApiPublicHooksInstallmentRemindersRoute: typeof ApiPublicHooksInstallmentRemindersRoute
+  ApiPublicHooksMercadopagoWebhookRoute: typeof ApiPublicHooksMercadopagoWebhookRoute
   ApiPublicHooksReengagementRoute: typeof ApiPublicHooksReengagementRoute
   ApiPublicHooksWaBroadcastProcessRoute: typeof ApiPublicHooksWaBroadcastProcessRoute
   ApiPublicHooksWaProcessRoute: typeof ApiPublicHooksWaProcessRoute
@@ -1190,6 +1176,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksReengagementRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/mercadopago-webhook': {
+      id: '/api/public/hooks/mercadopago-webhook'
+      path: '/api/public/hooks/mercadopago-webhook'
+      fullPath: '/api/public/hooks/mercadopago-webhook'
+      preLoaderRoute: typeof ApiPublicHooksMercadopagoWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/installment-reminders': {
       id: '/api/public/hooks/installment-reminders'
       path: '/api/public/hooks/installment-reminders'
@@ -1216,20 +1209,6 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/appointment-reminders'
       fullPath: '/api/public/hooks/appointment-reminders'
       preLoaderRoute: typeof ApiPublicHooksAppointmentRemindersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/hooks/appmax-webhook': {
-      id: '/api/public/hooks/appmax-webhook'
-      path: '/api/public/hooks/appmax-webhook'
-      fullPath: '/api/public/hooks/appmax-webhook'
-      preLoaderRoute: typeof ApiPublicHooksAppmaxWebhookRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/hooks/appmax-health': {
-      id: '/api/public/hooks/appmax-health'
-      path: '/api/public/hooks/appmax-health'
-      fullPath: '/api/public/hooks/appmax-health'
-      preLoaderRoute: typeof ApiPublicHooksAppmaxHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/affiliate/track': {
@@ -1359,14 +1338,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicWhatsappRoute: ApiPublicWhatsappRoute,
   ApiPublicZapiSetupRoute: ApiPublicZapiSetupRoute,
   ApiPublicAffiliateTrackRoute: ApiPublicAffiliateTrackRoute,
-  ApiPublicHooksAppmaxHealthRoute: ApiPublicHooksAppmaxHealthRoute,
-  ApiPublicHooksAppmaxWebhookRoute: ApiPublicHooksAppmaxWebhookRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,
   ApiPublicHooksBillPaymentCheckRoute: ApiPublicHooksBillPaymentCheckRoute,
   ApiPublicHooksBillRemindersRoute: ApiPublicHooksBillRemindersRoute,
   ApiPublicHooksInstallmentRemindersRoute:
     ApiPublicHooksInstallmentRemindersRoute,
+  ApiPublicHooksMercadopagoWebhookRoute: ApiPublicHooksMercadopagoWebhookRoute,
   ApiPublicHooksReengagementRoute: ApiPublicHooksReengagementRoute,
   ApiPublicHooksWaBroadcastProcessRoute: ApiPublicHooksWaBroadcastProcessRoute,
   ApiPublicHooksWaProcessRoute: ApiPublicHooksWaProcessRoute,
