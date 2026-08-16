@@ -90,7 +90,16 @@ export async function mpRequest<T = any>(
   const doFetch = () =>
     fetch(`${API_BASE}${path}`, {
       method,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${creds.accessToken}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${creds.accessToken}`,
+        // Confirmado na doc oficial (subscriptions/.../authorized-payments):
+        // requisições com credenciais de teste precisam desse header pra
+        // achar o card_token_id (também gerado em modo teste) — sem ele,
+        // /preapproval procura o token no escopo de produção e devolve
+        // "Card token service not found" mesmo com um token válido.
+        ...(creds.environment === "sandbox" ? { "X-scope": "stage" } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
 
