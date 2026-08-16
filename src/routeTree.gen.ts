@@ -39,6 +39,7 @@ import { Route as AppCheckoutRouteImport } from './routes/app.checkout'
 import { Route as AppCasalDashboardRouteImport } from './routes/app.casal-dashboard'
 import { Route as AppCasalRouteImport } from './routes/app.casal'
 import { Route as AppCalendarioRouteImport } from './routes/app.calendario'
+import { Route as AppAssinaturaRouteImport } from './routes/app.assinatura'
 import { Route as AppAfiliadosRouteImport } from './routes/app.afiliados'
 import { Route as AdminWhatsappRouteImport } from './routes/admin.whatsapp'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
@@ -219,6 +220,11 @@ const AppCasalRoute = AppCasalRouteImport.update({
 const AppCalendarioRoute = AppCalendarioRouteImport.update({
   id: '/calendario',
   path: '/calendario',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAssinaturaRoute = AppAssinaturaRouteImport.update({
+  id: '/assinatura',
+  path: '/assinatura',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAfiliadosRoute = AppAfiliadosRouteImport.update({
@@ -411,6 +417,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/app/afiliados': typeof AppAfiliadosRoute
+  '/app/assinatura': typeof AppAssinaturaRoute
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
@@ -472,6 +479,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/app/afiliados': typeof AppAfiliadosRoute
+  '/app/assinatura': typeof AppAssinaturaRoute
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
@@ -536,6 +544,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/app/afiliados': typeof AppAfiliadosRoute
+  '/app/assinatura': typeof AppAssinaturaRoute
   '/app/calendario': typeof AppCalendarioRoute
   '/app/casal': typeof AppCasalRoute
   '/app/casal-dashboard': typeof AppCasalDashboardRoute
@@ -601,6 +610,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/whatsapp'
     | '/app/afiliados'
+    | '/app/assinatura'
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
@@ -662,6 +672,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/whatsapp'
     | '/app/afiliados'
+    | '/app/assinatura'
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
@@ -725,6 +736,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/whatsapp'
     | '/app/afiliados'
+    | '/app/assinatura'
     | '/app/calendario'
     | '/app/casal'
     | '/app/casal-dashboard'
@@ -1001,6 +1013,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCalendarioRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/assinatura': {
+      id: '/app/assinatura'
+      path: '/assinatura'
+      fullPath: '/app/assinatura'
+      preLoaderRoute: typeof AppAssinaturaRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/afiliados': {
       id: '/app/afiliados'
       path: '/afiliados'
@@ -1275,6 +1294,7 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface AppRouteChildren {
   AppAfiliadosRoute: typeof AppAfiliadosRoute
+  AppAssinaturaRoute: typeof AppAssinaturaRoute
   AppCalendarioRoute: typeof AppCalendarioRoute
   AppCasalRoute: typeof AppCasalRoute
   AppCasalDashboardRoute: typeof AppCasalDashboardRoute
@@ -1300,6 +1320,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAfiliadosRoute: AppAfiliadosRoute,
+  AppAssinaturaRoute: AppAssinaturaRoute,
   AppCalendarioRoute: AppCalendarioRoute,
   AppCasalRoute: AppCasalRoute,
   AppCasalDashboardRoute: AppCasalDashboardRoute,

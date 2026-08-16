@@ -1,7 +1,7 @@
 import {
   User as UserIcon, ArrowLeftRight, Bell, Sparkles,
   Wallet, CalendarDays, Repeat, CreditCard, PiggyBank,
-  AlertTriangle, Target, Crown, Heart, Settings2,
+  AlertTriangle, Target, Crown, Heart, Settings2, Receipt,
   type LucideIcon,
 } from "lucide-react";
 
@@ -17,6 +17,7 @@ export const navigationSections: NavSection[] = [
     title: "PRINCIPAL",
     items: [
       { to: "/app/perfil", label: "Meu Perfil", icon: UserIcon },
+      { to: "/app/assinatura", label: "Assinatura", icon: Receipt },
       { to: "/app/casal", label: "Casal", icon: Heart },
       { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },
       { to: "/app/compromissos", label: "Lembretes", icon: Bell },

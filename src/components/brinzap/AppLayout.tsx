@@ -13,12 +13,13 @@ import { DesktopSidebar } from "@/components/brinzap/DesktopSidebar";
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank,
   CreditCard, AlertTriangle, Sparkles, Bell, Wallet, Settings2,
-  User as UserIcon, LogOut, Menu, X, CalendarDays, Target, Repeat, Handshake, Heart, type LucideIcon
+  User as UserIcon, LogOut, Menu, X, CalendarDays, Target, Repeat, Handshake, Heart, Receipt, type LucideIcon
 } from "lucide-react";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; exact?: boolean };
 const nav: NavItem[] = [
   { to: "/app/perfil", label: "Meu Perfil", icon: UserIcon, exact: true },
+  { to: "/app/assinatura", label: "Assinatura", icon: Receipt },
   { to: "/app/casal", label: "Casal", icon: Heart },
   { to: "/app/transacoes", label: "Transações", icon: ArrowLeftRight },
   { to: "/app/compromissos", label: "Lembretes", icon: Bell },
