@@ -25,15 +25,22 @@ export const getMercadoPagoPublicConfig = createServerFn({ method: "GET" })
 
 // Cada plano do Abio vira um "preapproval_plan" no Mercado Pago — criado uma
 // única vez, sob demanda, e reaproveitado depois (id salvo em plans.mp_plan_id).
-async function ensureMercadoPagoPlanId(planSlug: string, planName: string, priceCents: number, frequencyMonths: number): Promise<string> {
+async function ensureMercadoPagoPlanId(planSlug: string, planName: string, priceCents: number, frequencyMonths: number, forceFresh = false): Promise<string> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: dbPlan } = await supabaseAdmin.from("plans").select("mp_plan_id").eq("slug", planSlug).maybeSingle();
-  if (dbPlan?.mp_plan_id) return dbPlan.mp_plan_id;
+  if (!forceFresh) {
+    const { data: dbPlan } = await supabaseAdmin.from("plans").select("mp_plan_id").eq("slug", planSlug).maybeSingle();
+    if (dbPlan?.mp_plan_id) return dbPlan.mp_plan_id;
+  }
 
   const { createMercadoPagoPlan } = await import("@/lib/mercadopago.server");
   const mpPlan = await createMercadoPagoPlan({
     reason: planName, amountCents: priceCents, frequency: frequencyMonths, backUrl: BACK_URL,
   });
+  console.log("[mercadopago] preapproval_plan criado", JSON.stringify(mpPlan));
+  // Observado em sandbox: usar o plano recém-criado na mesma resposta às
+  // vezes falha com "template ... does not exist" (POST /preapproval) —
+  // parece um pequeno delay de propagação do lado da Mercado Pago.
+  await new Promise((r) => setTimeout(r, 1500));
   await supabaseAdmin.from("plans").update({ mp_plan_id: mpPlan.id }).eq("slug", planSlug);
   return mpPlan.id;
 }
@@ -68,13 +75,27 @@ export const startCheckout = createServerFn({ method: "POST" })
     try {
       const priceCents = Math.round(plan.totalPrice * 100);
       const frequencyMonths = Math.max(1, Math.round(plan.durationDays / 30));
-      const mpPlanId = await ensureMercadoPagoPlanId(plan.slug, plan.name, priceCents, frequencyMonths);
+      let mpPlanId = await ensureMercadoPagoPlanId(plan.slug, plan.name, priceCents, frequencyMonths);
 
       const { createMercadoPagoSubscription, supersedeActiveMercadoPagoSubscriptions } = await import("@/lib/mercadopago.server");
-      const sub = await createMercadoPagoSubscription({
-        planId: mpPlanId, cardTokenId: data.cardToken, payerEmail: profile.email,
-        externalReference: userId, amountCents: priceCents, frequency: frequencyMonths, backUrl: BACK_URL,
-      });
+      let sub;
+      try {
+        sub = await createMercadoPagoSubscription({
+          planId: mpPlanId, cardTokenId: data.cardToken, payerEmail: profile.email,
+          externalReference: userId, amountCents: priceCents, frequency: frequencyMonths, backUrl: BACK_URL,
+        });
+      } catch (e: any) {
+        // O plano cacheado (plans.mp_plan_id) pode ter ficado inválido do lado
+        // da Mercado Pago ("template ... does not exist") — descarta o cache
+        // e tenta uma vez mais com um plano recém-criado antes de desistir.
+        if (!/does not exist|template/i.test(String(e?.message ?? ""))) throw e;
+        console.warn("[mercadopago] plano cacheado inválido, recriando", plan.slug, e?.message);
+        mpPlanId = await ensureMercadoPagoPlanId(plan.slug, plan.name, priceCents, frequencyMonths, true);
+        sub = await createMercadoPagoSubscription({
+          planId: mpPlanId, cardTokenId: data.cardToken, payerEmail: profile.email,
+          externalReference: userId, amountCents: priceCents, frequency: frequencyMonths, backUrl: BACK_URL,
+        });
+      }
 
       await supabaseAdmin.from("checkout_intents").update({ mp_preapproval_id: sub.id }).eq("id", intent.id);
 
