@@ -47,7 +47,9 @@ async function ensureMercadoPagoPlanId(planSlug: string, planName: string, price
 
 const checkoutInput = z.object({
   planSlug: z.string().min(1).max(60),
-  cardToken: z.string().min(10).max(500),
+  paymentMethod: z.enum(["credit_card", "pix"]),
+  document: z.string().min(11).max(18),
+  cardToken: z.string().min(10).max(500).optional(),
 });
 
 export const startCheckout = createServerFn({ method: "POST" })
@@ -55,12 +57,19 @@ export const startCheckout = createServerFn({ method: "POST" })
   .inputValidator((i) => checkoutInput.parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    if (data.paymentMethod === "credit_card" && !data.cardToken) {
+      throw new Error("Token do cartão ausente — tokenização falhou no navegador.");
+    }
     const plan = getPlan(data.planSlug);
     if (!plan) throw new Error("Plano não encontrado.");
+    const documentNumber = data.document.replace(/\D/g, "");
+    if (documentNumber.length !== 11 && documentNumber.length !== 14) {
+      throw new Error("CPF/CNPJ inválido.");
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: profile, error: pErr } = await supabase
-      .from("profiles").select("email").eq("id", userId).maybeSingle();
+      .from("profiles").select("name, email").eq("id", userId).maybeSingle();
     if (pErr) throw new Error(pErr.message);
     if (!profile?.email) throw new Error("Seu perfil não tem e-mail cadastrado.");
 
@@ -68,12 +77,35 @@ export const startCheckout = createServerFn({ method: "POST" })
     // fica um registro rastreável em vez de o clique do usuário sumir sem rastro.
     const { data: intent, error: iErr } = await supabase
       .from("checkout_intents")
-      .insert({ user_id: userId, plan_slug: plan.slug, payment_method: "credit_card", status: "pending" })
+      .insert({ user_id: userId, plan_slug: plan.slug, payment_method: data.paymentMethod, status: "pending" })
       .select().single();
     if (iErr) throw new Error(iErr.message);
 
+    const priceCents = Math.round(plan.totalPrice * 100);
+
+    if (data.paymentMethod === "pix") {
+      try {
+        const { createMercadoPagoPixPayment } = await import("@/lib/mercadopago.server");
+        const [firstName, ...rest] = (profile.name || "Cliente Abio").trim().split(/\s+/);
+        const lastName = rest.join(" ") || "Abio";
+        const payment = await createMercadoPagoPixPayment({
+          amountCents: priceCents, description: plan.name, payerEmail: profile.email,
+          firstName, lastName, documentNumber, externalReference: intent.id,
+        });
+        await supabaseAdmin.from("checkout_intents").update({ mp_payment_id: String(payment.id) }).eq("id", intent.id);
+        return {
+          intentId: intent.id as string,
+          status: "pending" as const,
+          pixQrCode: payment.point_of_interaction?.transaction_data?.qr_code_base64 ?? null,
+          pixEmv: payment.point_of_interaction?.transaction_data?.qr_code ?? null,
+        };
+      } catch (e: any) {
+        await supabaseAdmin.from("checkout_intents").update({ status: "failed" }).eq("id", intent.id);
+        throw new Error(e?.message ?? "Falha ao gerar o Pix.");
+      }
+    }
+
     try {
-      const priceCents = Math.round(plan.totalPrice * 100);
       const frequencyMonths = Math.max(1, Math.round(plan.durationDays / 30));
       let mpPlanId = await ensureMercadoPagoPlanId(plan.slug, plan.name, priceCents, frequencyMonths);
 
@@ -81,7 +113,7 @@ export const startCheckout = createServerFn({ method: "POST" })
       let sub;
       try {
         sub = await createMercadoPagoSubscription({
-          planId: mpPlanId, cardTokenId: data.cardToken, payerEmail: profile.email,
+          planId: mpPlanId, cardTokenId: data.cardToken!, payerEmail: profile.email,
           externalReference: userId, amountCents: priceCents, frequency: frequencyMonths, backUrl: BACK_URL,
         });
       } catch (e: any) {
@@ -92,7 +124,7 @@ export const startCheckout = createServerFn({ method: "POST" })
         console.warn("[mercadopago] plano cacheado inválido, recriando", plan.slug, e?.message);
         mpPlanId = await ensureMercadoPagoPlanId(plan.slug, plan.name, priceCents, frequencyMonths, true);
         sub = await createMercadoPagoSubscription({
-          planId: mpPlanId, cardTokenId: data.cardToken, payerEmail: profile.email,
+          planId: mpPlanId, cardTokenId: data.cardToken!, payerEmail: profile.email,
           externalReference: userId, amountCents: priceCents, frequency: frequencyMonths, backUrl: BACK_URL,
         });
       }

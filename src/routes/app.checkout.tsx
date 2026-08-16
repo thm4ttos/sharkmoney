@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowLeft, CreditCard, ShieldCheck, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, CreditCard, ShieldCheck, Loader2, CheckCircle2, XCircle, QrCode, Copy, Check } from "lucide-react";
 import { getPlan, subscriptionPlans, monthlyEquivalent, savings, brl, type SubscriptionPlanId } from "@/lib/plans";
 import { startCheckout, getMyCheckoutIntent, getMercadoPagoPublicConfig } from "@/lib/mercadopago.functions";
 
@@ -32,6 +32,7 @@ function Page() {
   const navigate = useNavigate();
   const plan = getPlan(planSlug) ?? subscriptionPlans[0];
 
+  const [paymentMethod, setPaymentMethod] = useState<"credit_card" | "pix">("credit_card");
   const [cardNumber, setCardNumber] = useState("");
   const [holderName, setHolderName] = useState("");
   const [expMonth, setExpMonth] = useState("");
@@ -44,12 +45,15 @@ function Page() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ status: "completed" | "failed" | "pending"; reason?: string } | null>(null);
   const [pendingIntentId, setPendingIntentId] = useState<string | null>(null);
+  const [pixData, setPixData] = useState<{ qrCodeBase64: string | null; emv: string | null } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Trocar de plano no meio do fluxo limpa qualquer erro/resultado em exibição.
   useEffect(() => {
     setResult(null);
     setError("");
     setPendingIntentId(null);
+    setPixData(null);
   }, [planSlug]);
 
   const runConfig = useServerFn(getMercadoPagoPublicConfig);
@@ -112,7 +116,7 @@ function Page() {
         identificationType: "CPF",
         identificationNumber: doc,
       });
-      const res = await runCheckout({ data: { planSlug: plan.slug, cardToken: cardToken.id } }) as any;
+      const res = await runCheckout({ data: { planSlug: plan.slug, paymentMethod: "credit_card", document: doc, cardToken: cardToken.id } }) as any;
       if (res.status === "pending") setPendingIntentId(res.intentId);
       else setResult({ status: res.status, reason: res.reason });
     } catch (e: any) {
@@ -122,10 +126,72 @@ function Page() {
     }
   };
 
+  const submitPix = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    const doc = documentNumber.replace(/\D/g, "");
+    if (doc.length !== 11) { setError("Informe um CPF válido."); return; }
+    setSubmitting(true);
+    try {
+      const res = await runCheckout({ data: { planSlug: plan.slug, paymentMethod: "pix", document: doc } }) as any;
+      if (res.status === "pending") {
+        setPixData({ qrCodeBase64: res.pixQrCode ?? null, emv: res.pixEmv ?? null });
+        setPendingIntentId(res.intentId);
+      } else {
+        setResult({ status: res.status, reason: res.reason });
+      }
+    } catch (e: any) {
+      setError(e?.message || "Não foi possível gerar o Pix. Tente de novo.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const copyPixCode = async () => {
+    if (!pixData?.emv) return;
+    try {
+      await navigator.clipboard.writeText(pixData.emv);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch { /* clipboard indisponível — o campo abaixo continua selecionável manualmente */ }
+  };
+
   if (result) {
     return (
       <div className="max-w-lg mx-auto">
         <ResultCard result={result} plan={plan} />
+      </div>
+    );
+  }
+
+  if (pendingIntentId && pixData) {
+    return (
+      <div className="max-w-lg mx-auto">
+        <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-8 text-center space-y-4">
+          <h1 className="font-display text-2xl">Pague com Pix pra ativar</h1>
+          <p className="text-sm text-muted-foreground">Escaneie o QR code ou copie o código abaixo no app do seu banco.</p>
+          {pixData.qrCodeBase64 && (
+            <img src={`data:image/png;base64,${pixData.qrCodeBase64}`} alt="QR code Pix"
+              className="mx-auto h-52 w-52 rounded-xl border border-border bg-white p-2" />
+          )}
+          {pixData.emv && (
+            <div className="text-left">
+              <label className="text-xs text-muted-foreground">Pix copia e cola</label>
+              <div className="mt-1 flex gap-2">
+                <input readOnly value={pixData.emv}
+                  className="flex-1 min-w-0 bg-input rounded-xl px-3 py-2.5 text-xs truncate" />
+                <button onClick={copyPixCode} type="button"
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gradient-brand text-primary-foreground px-3 py-2.5 text-xs glow-neon">
+                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? "Copiado" : "Copiar"}
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground pt-1">
+            <Loader2 className="h-4 w-4 animate-spin" /> Aguardando confirmação do pagamento...
+          </div>
+        </div>
       </div>
     );
   }
@@ -182,51 +248,93 @@ function Page() {
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <CreditCard className="h-4 w-4" /> Cobrança automática no cartão
+        <div className="flex gap-2">
+          <button type="button" onClick={() => { setPaymentMethod("credit_card"); setError(""); }}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-smooth ${paymentMethod === "credit_card" ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-background/40"}`}>
+            <CreditCard className="h-3.5 w-3.5" /> Cartão de crédito
+          </button>
+          <button type="button" onClick={() => { setPaymentMethod("pix"); setError(""); }}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-smooth ${paymentMethod === "pix" ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-background/40"}`}>
+            <QrCode className="h-3.5 w-3.5" /> Pix
+          </button>
         </div>
 
-        <form onSubmit={submitCard} className="space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground">CPF do titular</label>
-            <input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)}
-              placeholder="000.000.000-00" inputMode="numeric"
-              className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Número do cartão</label>
-            <input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)}
-              placeholder="0000 0000 0000 0000" inputMode="numeric"
-              className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Nome no cartão</label>
-            <input value={holderName} onChange={(e) => setHolderName(e.target.value)}
-              placeholder="Como está impresso no cartão"
-              className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <input value={expMonth} onChange={(e) => setExpMonth(e.target.value)} placeholder="MM" inputMode="numeric"
-              className="bg-input rounded-xl px-3 py-2.5 text-sm" />
-            <input value={expYear} onChange={(e) => setExpYear(e.target.value)} placeholder="AAAA" inputMode="numeric"
-              className="bg-input rounded-xl px-3 py-2.5 text-sm" />
-            <input value={cvv} onChange={(e) => setCvv(e.target.value)} placeholder="CVV" inputMode="numeric"
-              className="bg-input rounded-xl px-3 py-2.5 text-sm" />
-          </div>
+        {paymentMethod === "credit_card" ? (
+          <>
+            <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <CreditCard className="h-4 w-4" /> Cobrança automática no cartão
+            </div>
 
-          {scriptError && <p className="text-xs text-destructive">{scriptError}</p>}
-          {error && <p className="text-xs text-destructive">{error}</p>}
+            <form onSubmit={submitCard} className="space-y-3">
+              <div>
+                <label className="text-xs text-muted-foreground">CPF do titular</label>
+                <input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)}
+                  placeholder="000.000.000-00" inputMode="numeric"
+                  className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Número do cartão</label>
+                <input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)}
+                  placeholder="0000 0000 0000 0000" inputMode="numeric"
+                  className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Nome no cartão</label>
+                <input value={holderName} onChange={(e) => setHolderName(e.target.value)}
+                  placeholder="Como está impresso no cartão"
+                  className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <input value={expMonth} onChange={(e) => setExpMonth(e.target.value)} placeholder="MM" inputMode="numeric"
+                  className="bg-input rounded-xl px-3 py-2.5 text-sm" />
+                <input value={expYear} onChange={(e) => setExpYear(e.target.value)} placeholder="AAAA" inputMode="numeric"
+                  className="bg-input rounded-xl px-3 py-2.5 text-sm" />
+                <input value={cvv} onChange={(e) => setCvv(e.target.value)} placeholder="CVV" inputMode="numeric"
+                  className="bg-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
 
-          <button type="submit" disabled={submitting || !scriptReady}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground py-2.5 text-sm glow-neon disabled:opacity-50">
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-            {submitting ? "Processando..." : !scriptReady ? "Carregando formulário seguro..." : `Assinar ${brl(plan.totalPrice)}`}
-          </button>
-        </form>
+              {scriptError && <p className="text-xs text-destructive">{scriptError}</p>}
+              {error && <p className="text-xs text-destructive">{error}</p>}
 
-        <p className="text-[11px] text-muted-foreground text-center flex items-center justify-center gap-1.5">
-          <ShieldCheck className="h-3.5 w-3.5" /> Pagamento processado com segurança pelo Mercado Pago. Seus dados de cartão nunca passam pelos servidores do Abio.
-        </p>
+              <button type="submit" disabled={submitting || !scriptReady}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground py-2.5 text-sm glow-neon disabled:opacity-50">
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                {submitting ? "Processando..." : !scriptReady ? "Carregando formulário seguro..." : `Assinar ${brl(plan.totalPrice)}`}
+              </button>
+            </form>
+
+            <p className="text-[11px] text-muted-foreground text-center flex items-center justify-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" /> Pagamento processado com segurança pelo Mercado Pago. Seus dados de cartão nunca passam pelos servidores do Abio.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <QrCode className="h-4 w-4" /> QR code ou copia-e-cola — renovação exige gerar um novo Pix a cada ciclo
+            </div>
+
+            <form onSubmit={submitPix} className="space-y-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Seu CPF</label>
+                <input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)}
+                  placeholder="000.000.000-00" inputMode="numeric"
+                  className="w-full mt-1 bg-input rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+
+              {error && <p className="text-xs text-destructive">{error}</p>}
+
+              <button type="submit" disabled={submitting}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand text-primary-foreground py-2.5 text-sm glow-neon disabled:opacity-50">
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+                {submitting ? "Gerando..." : `Gerar Pix de ${brl(plan.totalPrice)}`}
+              </button>
+            </form>
+
+            <p className="text-[11px] text-muted-foreground text-center flex items-center justify-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" /> Pagamento processado com segurança pelo Mercado Pago.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

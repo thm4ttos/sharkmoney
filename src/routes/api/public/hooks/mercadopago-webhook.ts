@@ -65,6 +65,7 @@ async function handle(request: Request) {
   try {
     if (type === "subscription_preapproval") await handlePreapprovalEvent(String(dataId));
     else if (type === "subscription_authorized_payment") await handleAuthorizedPaymentEvent(String(dataId));
+    else if (type === "payment") await handlePaymentEvent(String(dataId));
     await supabaseAdmin.from("payment_webhook_events").update({ processed_at: new Date().toISOString() }).eq("id", logRow.id);
   } catch (e: any) {
     console.error("[mercadopago-webhook] processing failed", type, e?.message ?? e);
@@ -167,4 +168,59 @@ async function handleAuthorizedPaymentEvent(paymentId: string) {
   const newEnds = nextChargeAt ? new Date(nextChargeAt).toISOString() : new Date(Date.now() + 30 * 86400_000).toISOString();
   await supabaseAdmin.from("subscriptions").update({ status: "active", ends_at: newEnds }).eq("id", sub.id);
   await supabaseAdmin.from("profiles").update({ trial_ends_at: newEnds }).eq("id", sub.user_id);
+}
+
+/**
+ * Pagamento Pix avulso (não-recorrente) — confirmação chega no tópico
+ * "payment" (não "subscription_authorized_payment", que é só pra cobranças
+ * de assinatura de cartão). Se o pagamento não for Pix, ignora aqui: cobrança
+ * recorrente de cartão já é tratada por handleAuthorizedPaymentEvent, e o
+ * mesmo id de pagamento pode chegar nos dois tópicos.
+ */
+async function handlePaymentEvent(paymentId: string) {
+  const { getMercadoPagoPayment } = await import("@/lib/mercadopago.server");
+  const payment = await getMercadoPagoPayment(paymentId);
+  if (payment.payment_method_id !== "pix") return;
+
+  const intentId = payment.external_reference;
+  if (!intentId) return;
+
+  const { data: intent } = await supabaseAdmin
+    .from("checkout_intents")
+    .select("*")
+    .eq("id", intentId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (!intent) return; // já processado ou não é nosso.
+
+  const approved = String(payment.status ?? "").toLowerCase() === "approved";
+  if (!approved) {
+    if (["cancelled", "rejected"].includes(String(payment.status ?? "").toLowerCase())) {
+      await supabaseAdmin.from("checkout_intents").update({ status: "failed" }).eq("id", intent.id);
+    }
+    return;
+  }
+
+  const plan = getPlan(intent.plan_slug);
+  if (!plan) {
+    await supabaseAdmin.from("checkout_intents").update({ status: "failed" }).eq("id", intent.id);
+    return;
+  }
+
+  const now = new Date();
+  const endsAt = new Date(now.getTime() + plan.durationDays * 86400_000).toISOString();
+  await supabaseAdmin.from("subscriptions").insert({
+    user_id: intent.user_id, plan_slug: plan.slug, plan_name: plan.name,
+    period: plan.id === "six_months" ? "semiannual" : plan.id,
+    status: "active", price_cents: Math.round(plan.totalPrice * 100),
+    started_at: now.toISOString(), ends_at: endsAt,
+    mp_payment_id: String(payment.id), payment_method: "pix",
+  });
+  await supabaseAdmin.from("profiles").update({ plan: plan.name, trial_ends_at: endsAt }).eq("id", intent.user_id);
+  await supabaseAdmin.from("checkout_intents").update({ status: "completed" }).eq("id", intent.id);
+
+  const { data: profile } = await supabaseAdmin.from("profiles").select("phone").eq("id", intent.user_id).maybeSingle();
+  if (profile?.phone) {
+    await sendWhatsAppText(profile.phone, `🎉 Pagamento confirmado! Seu ${plan.name} já está ativo no Abio.`);
+  }
 }

@@ -83,6 +83,7 @@ export async function mpRequest<T = any>(
   method: "GET" | "POST" | "PUT",
   path: string,
   body?: Record<string, unknown>,
+  idempotencyKey?: string,
 ): Promise<T> {
   const creds = await loadMercadoPagoCreds();
   if (!creds.accessToken) throw new Error("Credenciais Mercado Pago não configuradas.");
@@ -99,6 +100,10 @@ export async function mpRequest<T = any>(
         // /preapproval procura o token no escopo de produção e devolve
         // "Card token service not found" mesmo com um token válido.
         ...(creds.environment === "sandbox" ? { "X-scope": "stage" } : {}),
+        // Sem isso, o retry automático de um 5xx (linha abaixo) poderia criar
+        // DOIS pagamentos Pix pro mesmo checkout — a idempotency key garante
+        // que a Mercado Pago trata o retry como a mesma requisição.
+        ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -178,6 +183,43 @@ export async function getMercadoPagoSubscription(id: string): Promise<MercadoPag
 export async function cancelMercadoPagoSubscription(id: string): Promise<MercadoPagoSubscription> {
   // Valor exato confirmado na doc oficial: "canceled" (grafia americana, um só L).
   return mpRequest("PUT", `/preapproval/${id}`, { status: "canceled" });
+}
+
+export type MercadoPagoPayment = {
+  id: number; status: string; status_detail?: string; payment_method_id?: string;
+  external_reference?: string;
+  point_of_interaction?: { transaction_data?: { qr_code?: string; qr_code_base64?: string } };
+  [k: string]: any;
+};
+
+/**
+ * Pix não tem API pública confirmada de cobrança automática recorrente na
+ * Mercado Pago — isso aqui é um pagamento AVULSO (POST /v1/payments,
+ * payment_method_id="pix"), não uma assinatura. Payload confirmado no
+ * repositório oficial de exemplo (github.com/mercadopago/pix-payment-sample-node).
+ * Idempotency key = o id da checkout_intent, pra nunca gerar Pix duplicado
+ * se a chamada precisar de retry.
+ */
+export async function createMercadoPagoPixPayment(input: {
+  amountCents: number; description: string; payerEmail: string;
+  firstName: string; lastName: string; documentNumber: string; externalReference: string;
+}): Promise<MercadoPagoPayment> {
+  return mpRequest("POST", "/v1/payments", {
+    payment_method_id: "pix",
+    description: input.description,
+    transaction_amount: input.amountCents / 100,
+    external_reference: input.externalReference,
+    payer: {
+      email: input.payerEmail,
+      first_name: input.firstName,
+      last_name: input.lastName,
+      identification: { type: "CPF", number: input.documentNumber },
+    },
+  }, input.externalReference);
+}
+
+export async function getMercadoPagoPayment(id: number | string): Promise<MercadoPagoPayment> {
+  return mpRequest("GET", `/v1/payments/${id}`);
 }
 
 /**
