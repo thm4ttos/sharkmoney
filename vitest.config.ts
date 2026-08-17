@@ -8,8 +8,11 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
+  resolve: { dedupe: ["zod"] },
+  ssr: { noExternal: ["zod"] },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    server: { deps: { inline: ["zod"] } },
   },
 });

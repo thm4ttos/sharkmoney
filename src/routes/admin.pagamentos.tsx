@@ -122,7 +122,7 @@ function CredsCard() {
 
           <p className="text-[11px] text-muted-foreground pt-2 border-t border-border">
             URL de webhook pra configurar no painel do Mercado Pago: <code className="text-primary">https://abio.fun/api/public/hooks/mercadopago-webhook</code> —
-            eventos a marcar: <b>subscription_preapproval</b> e <b>subscription_authorized_payment</b>.
+            eventos a marcar: <b>subscription_preapproval</b>, <b>subscription_authorized_payment</b> e <b>payment</b> (esse último confirma o Pix avulso).
           </p>
         </div>
       )}

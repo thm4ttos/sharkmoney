@@ -1728,6 +1728,14 @@ export async function recordGoal(
   return { ok: true, replyText: `🎯 Meta criada: *${title}* — alvo ${BRL(target)}` };
 }
 
+// Janela de "acabou de fazer isso" — uma correção que chega minutos depois do
+// lançamento original não pode virar interrogatório só porque o usuário tem
+// outras transações mais antigas no mesmo dia; só pede desambiguação quando
+// há 2+ candidatos IGUALMENTE recentes (item 11 vs. item 12 do pedido: correção
+// imediata executa na hora, correção distante da mensagem original pergunta
+// se houver mais de um candidato plausível).
+const FRESH_WINDOW_MS = 10 * 60 * 1000;
+
 // ===== Correction =====
 export async function correctLastTransaction(
   userId: string,
@@ -1736,10 +1744,10 @@ export async function correctLastTransaction(
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: recent } = await supabaseAdmin
     .from("transactions")
-    .select("id, kind, amount, category, description, occurred_at")
+    .select("id, kind, amount, category, description, occurred_at, created_at")
     .eq("user_id", userId)
     .gte("occurred_at", since)
-    .order("occurred_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(10);
 
   if (!recent || recent.length === 0) {
@@ -1756,7 +1764,16 @@ export async function correctLastTransaction(
     if (filtered.length > 0) candidates = filtered;
   }
 
-  if (candidates.length > 1 && !hint && input.correction_field !== "payment_method") {
+  const isFresh = (iso: string) => Date.now() - new Date(iso).getTime() < FRESH_WINDOW_MS;
+  const onlyTopIsFresh = candidates.length <= 1
+    || (isFresh((candidates[0] as any).created_at) && !isFresh((candidates[1] as any).created_at));
+
+  // Bug real corrigido: antes exigia `!hint` pra desambiguar — ou seja, um
+  // hint que reduzia a lista mas ainda deixava 2+ candidatos (ex.: duas
+  // compras no "mercado" recentes) nunca perguntava, só pegava o mais
+  // recente sem avisar. Hint serve pra FILTRAR candidatos, não pra pular a
+  // checagem de ambiguidade quando ainda sobra mais de um.
+  if (candidates.length > 1 && !onlyTopIsFresh && input.correction_field !== "payment_method") {
     const list = candidates.slice(0, 3).map((c, i) =>
       `${i + 1}. ${c.kind === "income" ? "💰" : "💸"} ${BRL(Number(c.amount))} — ${c.category}${c.description ? ` (${c.description})` : ""}`,
     ).join("\n");
@@ -3183,23 +3200,47 @@ export function detectPreviousEntryEditIntent(input: string): PreviousEntryEditP
 export async function applyEditToLastTransaction(
   userId: string,
   patch: PreviousEntryEditPatch,
-): Promise<{ ok: boolean; replyText: string }> {
-  // Busca a transação mais recente (última criada) — janela ampla de 7 dias.
+): Promise<{ ok: boolean; replyText: string; needsConfirmation?: boolean }> {
+  // Busca candidatos recentes (janela ampla de 7 dias) — nunca assume às cegas
+  // que "a transação mais recente" é a certa: se houver mais de um lançamento
+  // no período, o usuário pode estar se referindo a um mais antigo (ex.:
+  // "aquele mercado foi ontem" depois de já ter registrado outra coisa no meio).
+  // Bug real: antes desta correção, só buscava 1 registro (o mais recente por
+  // created_at) e aplicava a edição nele mesmo quando havia outros candidatos
+  // — podia corrigir a data/categoria do lançamento ERRADO silenciosamente.
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: last } = await supabaseAdmin
+  const { data: recent } = await supabaseAdmin
     .from("transactions")
     .select("id, amount, kind, category, description, occurred_at, created_at")
     .eq("user_id", userId)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(10);
 
-  if (!last) {
+  if (!recent || recent.length === 0) {
     return { ok: false, replyText: "🤔 Não achei um lançamento recente pra ajustar. Pode me dizer o valor e a descrição do que quer corrigir?" };
   }
 
-  const tx = last as any;
+  // Correção "na sequência" (poucos minutos depois do lançamento original) não
+  // pode virar interrogatório: se o mais recente é claramente o único criado
+  // "agora" (o segundo já é bem mais antigo), assume que é dele que se fala.
+  // Só pede pra escolher quando realmente existe ambiguidade — 2+ lançamentos
+  // igualmente "recentes", ou nenhum recente o bastante pra assumir sozinho.
+  const isFresh = (iso: string) => Date.now() - new Date(iso).getTime() < FRESH_WINDOW_MS;
+  const onlyTopIsFresh = recent.length === 1 || (isFresh(recent[0].created_at) && !isFresh(recent[1].created_at));
+
+  if (recent.length > 1 && !onlyTopIsFresh) {
+    const list = recent.slice(0, 3).map((c, i) =>
+      `${i + 1}. ${c.kind === "income" ? "💰" : "💸"} ${BRL(Number(c.amount))} — ${c.category}${c.description ? ` (${c.description})` : ""}`,
+    ).join("\n");
+    return {
+      ok: false,
+      needsConfirmation: true,
+      replyText: `Achei mais de um lançamento recente. Qual deles você quer ajustar?\n\n${list}\n\nResponda com mais detalhes (ex.: "o do mercado").`,
+    };
+  }
+
+  const tx = recent[0] as any;
   const label = tx.description || tx.category || (tx.kind === "income" ? "receita" : "despesa");
   const amountStr = BRL(Number(tx.amount));
 
@@ -3986,8 +4027,11 @@ export function detectAmountCorrectionIntent(
   const digits = ptNumberWordsToDigits(input);
   const t = digits.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+  // Bug real corrigido: exigia \s+ puro entre "não" e "foi/era" — "não, foi 90"
+  // (vírgula, pausa natural de fala) não disparava a correção. [,\s]+ aceita
+  // vírgula e/ou espaço entre as duas palavras.
   const trigger =
-    /\bn(a|ã)o\s+(foi|era|e|eram|s(a|ã)o)\b/.test(t) ||
+    /\bn(a|ã)o[,\s]+(foi|era|e|eram|s(a|ã)o)\b/.test(t) ||
     /\bcorrig(e|ir|indo|i|imos)\b/.test(t) ||
     /\berrei\b/.test(t) ||
     /\bme\s+enganei\b/.test(t) ||
@@ -4002,7 +4046,7 @@ export function detectAmountCorrectionIntent(
   // Frase com verbo de lançamento e sem gatilho forte = novo lançamento.
   const hasEntryVerb = /\b(gastei|paguei|comprei|recebi|ganhei)\b/.test(t);
   const strongTrigger =
-    /\bn(a|ã)o\s+(foi|era|eram)\b/.test(t) || /\bcorrig/.test(t) ||
+    /\bn(a|ã)o[,\s]+(foi|era|eram)\b/.test(t) || /\bcorrig/.test(t) ||
     /\berrei\b/.test(t) || /\bquis\s+dizer\b/.test(t) ||
     /\bo\s+certo\s+(e|foi|era)\b/.test(t);
   if (hasEntryVerb && !strongTrigger) return null;

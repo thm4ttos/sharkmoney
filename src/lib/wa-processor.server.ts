@@ -1667,14 +1667,24 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
 
 
     // ===== expense/income pending (imagem aguardando confirmação) =====
-    // O usuário mandou um comprovante e ficou uma pendência. Se ele responde
-    // com uma descrição livre ("foi sorvete", "era gasolina", "isso foi ontem"),
-    // mesclamos com os dados extraídos da nota e registramos direto — sem
-    // exigir "sim"/"não" literal e sem perder o contexto da imagem.
+    // Bug real corrigido: este bloco tinha o comentário de uma feature antiga
+    // ("comprovante com pendência de descrição"), mas esse fluxo hoje usa
+    // pending.kind="attachment_pending"/"document_pending", não mais "expense"/
+    // "income" — quem realmente cria pending.kind="expense"/"income" hoje é
+    // SÓ o gate de confiança/anomalia (mais abaixo, "Registrar mesmo assim?
+    // Responda sim ou não"). Como este bloco tratava QUALQUER resposta que não
+    // fosse sim/não como "aqui está a descrição, pode gravar", uma pergunta
+    // completamente diferente enviada nesse meio tempo (ex.: "quanto eu gastei
+    // esse mês?") gravava o valor sinalizado como anômalo/de baixa confiança
+    // mesmo sem confirmação — usando a pergunta como descrição. `pending.reason`
+    // (presente só no pending do gate de confiança) trava esse bloco: a
+    // pendência fica em aberto (expira em 5 min) e a mensagem segue o fluxo
+    // normal, respondendo o que o usuário realmente perguntou.
     if (
       pending &&
       !imageUrl &&
       (pending.kind === "expense" || pending.kind === "income") &&
+      !(pending as any).reason &&
       inputText &&
       !YES_RE.test(normalized) &&
       !NO_RE.test(normalized)
@@ -3193,18 +3203,23 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
     ) {
       // === BLINDAGEM V1 — Confiança + Anomalia (Pilares 1 e 3) ===
       // Determina se essa despesa exige confirmação antes de gravar.
-      // Regras:
-      //  - confidence < 0.80  → pergunta antes (baixa certeza)
-      //  - amount > 5x média  → pergunta antes (anomalia)
-      //  - 0.80 <= confidence < 0.95 → grava, mas registra no motor de aprendizado
-      //  - resto → executa direto pelo switch abaixo
+      // Regras (ver CONFIDENCE_HIGH/LOW/FLOOR em ai-confidence.server.ts):
+      //  - confidence >= 0.70 → executa direto pelo switch abaixo
+      //  - 0.50 <= confidence < 0.70 → executa, mas registra no motor de aprendizado
+      //  - 0.35 <= confidence < 0.50 → pergunta antes (confirmação simples sim/não)
+      //  - confidence < 0.35 → NUNCA executa direto (gate="menu") — pergunta antes
+      //  - amount > 5x média → pergunta antes (anomalia), independente de confidence
+      //
+      // Bug real corrigido: essa condição só checava gate==="ask", então uma
+      // despesa com confidence < 0.35 (gate="menu", contrato documentado como
+      // "nunca executa") caía no `else` e era gravada direto sem confirmação.
       const { gateConfidence, detectExpenseAnomaly, logMediumConfidence } =
         await import("./ai-confidence.server");
       const conf = typeof intent.confidence === "number" ? intent.confidence : undefined;
       const gate = gateConfidence(conf);
       const cat = intent.category ?? undefined;
       const anomaly = await detectExpenseAnomaly(profile.id, cat, intent.amount);
-      if (gate === "ask" || anomaly.isAnomaly) {
+      if (gate === "ask" || gate === "menu" || anomaly.isAnomaly) {
         const reason = anomaly.isAnomaly ? "anomaly" : "low_confidence";
         await supabaseAdmin.from("wa_contacts").upsert(
           {
