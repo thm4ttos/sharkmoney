@@ -155,6 +155,11 @@ function Page() {
     [appointments],
   );
 
+  const [view, setView] = useState<"pending" | "done">("pending");
+  const pendingList = useMemo(() => sorted.filter((a) => (a.status ?? "pending") === "pending"), [sorted]);
+  const doneList = useMemo(() => sorted.filter((a) => (a.status ?? "pending") !== "pending"), [sorted]);
+  const visible = view === "pending" ? pendingList : doneList;
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-28 lg:pb-6">
       <header className="flex items-center gap-4">
@@ -170,13 +175,28 @@ function Page() {
         </Button>
       </header>
 
+      <div className="flex gap-2">
+        <button
+          onClick={() => setView("pending")}
+          className={`flex-1 sm:flex-none rounded-xl border px-4 py-2 text-sm font-medium transition-smooth ${view === "pending" ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-background/40"}`}
+        >
+          Pendentes {pendingList.length > 0 ? `(${pendingList.length})` : ""}
+        </button>
+        <button
+          onClick={() => setView("done")}
+          className={`flex-1 sm:flex-none rounded-xl border px-4 py-2 text-sm font-medium transition-smooth ${view === "done" ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-background/40"}`}
+        >
+          Concluídos {doneList.length > 0 ? `(${doneList.length})` : ""}
+        </button>
+      </div>
+
       <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl divide-y divide-border">
         {isLoading && (
           <div className="p-10 text-center text-sm text-muted-foreground inline-flex items-center justify-center gap-2 w-full">
             <Loader2 className="h-4 w-4 animate-spin" /> Carregando lembretes...
           </div>
         )}
-        {!isLoading && sorted.map((a) => {
+        {!isLoading && visible.map((a) => {
           const scheduledAt = String(a.scheduled_at ?? "");
           const when = scheduledAt ? new Date(scheduledAt) : null;
           const status = a.status ?? "pending";
@@ -231,9 +251,14 @@ function Page() {
             </div>
           );
         })}
-        {!isLoading && sorted.length === 0 && (
+        {!isLoading && visible.length === 0 && view === "pending" && (
           <div className="p-10 text-center text-sm text-muted-foreground">
-            Nenhum lembrete cadastrado. Toque em <b>Novo lembrete</b> para adicionar.
+            Nenhum lembrete pendente. Toque em <b>Novo lembrete</b> para adicionar.
+          </div>
+        )}
+        {!isLoading && visible.length === 0 && view === "done" && (
+          <div className="p-10 text-center text-sm text-muted-foreground">
+            Nenhum lembrete concluído ou cancelado ainda.
           </div>
         )}
       </div>
