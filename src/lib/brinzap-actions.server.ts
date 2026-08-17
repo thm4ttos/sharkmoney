@@ -2606,12 +2606,21 @@ export async function processBulk(
           else failed++;
           break;
         }
-        case "appointment":
+        case "appointment": {
+          // Bug real corrigido: diferente de todos os outros casos abaixo,
+          // este nunca checava o retorno de recordAppointment — sempre
+          // reportava "registrado" mesmo quando a função internamente
+          // detectava duplicata (compromisso parecido já existente num
+          // intervalo de ±15min) e não gravava nada. O resumo mentia pro
+          // usuário dizendo que um compromisso novo foi criado quando na
+          // verdade nada aconteceu.
           if (it.scheduled_at) {
-            await recordAppointment(userId, { title: it.appointment_title ?? it.title ?? it.description ?? "Compromisso", scheduled_at: it.scheduled_at, notes: it.description });
-            created.push({ kind: "appointment", title: it.appointment_title ?? it.title ?? it.description });
+            const r = await recordAppointment(userId, { title: it.appointment_title ?? it.title ?? it.description ?? "Compromisso", scheduled_at: it.scheduled_at, notes: it.description });
+            if (r.row) created.push({ kind: "appointment", title: it.appointment_title ?? it.title ?? it.description });
+            else failed++;
           } else failed++;
           break;
+        }
         case "bill": {
           const r = await recordBill(userId, { title: it.title ?? it.description, amount: it.amount, frequency: it.frequency, next_due_at: it.next_due_at, category: it.category });
           if (r.ok) created.push({ kind: "bill", title: it.title ?? it.description, amount: it.amount }); else failed++;
