@@ -2221,9 +2221,16 @@ function detectBatchBillContext(rawLines: string[]): BatchBillContext {
     const d = Number(dueMatch[1] ?? dueMatch[2]);
     if (d >= 1 && d <= 31) dueDay = d;
   }
-  const defaultKind: "bill" | "installment" | null = FIXED_SIGNAL_RE.test(joined)
-    ? "bill"
-    : INSTALLMENT_SIGNAL_RE.test(joined) ? "installment" : null;
+  // Bug real corrigido: só virava conta fixa com a palavra literal "fixa(s)"
+  // na frase — uma lista espontânea como "todas vencem dia 5: água 56,
+  // internet 165, luz 330" (sem a palavra "fixa") virava gasto avulso,
+  // perdendo o dueDay já detectado. "Vence dia N" já É, por si só, um sinal
+  // forte de obrigação recorrente — gasto avulso é algo que JÁ aconteceu,
+  // não tem "dia de vencimento". Só não assume "bill" quando o sinal de
+  // parcelamento também está presente (esse tem prioridade).
+  const defaultKind: "bill" | "installment" | null = INSTALLMENT_SIGNAL_RE.test(joined)
+    ? "installment"
+    : (FIXED_SIGNAL_RE.test(joined) || dueDay != null) ? "bill" : null;
   return { dueDay, defaultKind };
 }
 
