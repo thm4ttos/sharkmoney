@@ -4,22 +4,19 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useLandingI18n } from "@/lib/landing-i18n";
 
-const KEY = "abio:gift-seen";
-
 export function GiftPopup() {
   const { t } = useLandingI18n();
   const [open, setOpen] = useState(false);
 
+  // Aparece sempre, a cada carregamento/atualização da página — não fica
+  // marcado como "já visto" entre visitas (pedido explícito: quem atualizar
+  // a página deve ver a oferta de novo, mesmo tendo fechado antes).
   useEffect(() => {
-    if (localStorage.getItem(KEY)) return;
     const timer = setTimeout(() => setOpen(true), 6000);
     return () => clearTimeout(timer);
   }, []);
 
-  const dismiss = () => {
-    localStorage.setItem(KEY, "1");
-    setOpen(false);
-  };
+  const dismiss = () => setOpen(false);
 
   return (
     <AnimatePresence>
@@ -46,6 +43,7 @@ export function GiftPopup() {
             <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{t("gift.desc")}</p>
             <Link
               to="/signup"
+              search={{ plan: undefined }}
               onClick={dismiss}
               className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
