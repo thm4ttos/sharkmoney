@@ -83,6 +83,32 @@ export function detectAppointmentCommand(text: string): ApptCommand | null {
   return null;
 }
 
+export type CustomReminderRequest = { leadMinutes: number; raw: string };
+
+// "me avisar com 30 minutos de antecedência", "avisar 2 horas antes",
+// "lembrar 1 dia antes" — pedido explícito de UM prazo específico de
+// lembrete, diferente dos 5 horários fixos padrão (3d/dia/4h/1h/30m antes).
+// Funciona igual em texto digitado ou áudio transcrito (a transcrição já
+// passa pelo mesmo pipeline de texto antes de chegar aqui).
+const CUSTOM_REMINDER_RE =
+  /\b(?:me\s+)?avis[ae]\w*\b[^.?!]{0,40}?\b(\d{1,3})\s*(minutos?|mins?|horas?|h|dias?)\b[^.?!]{0,20}?\b(?:de\s+)?anteced[êe]ncia\b|\b(\d{1,3})\s*(minutos?|mins?|horas?|h|dias?)\s+antes\b/i;
+
+export function detectCustomReminderLeadMinutes(text: string): CustomReminderRequest | null {
+  if (!text) return null;
+  const m = text.match(CUSTOM_REMINDER_RE);
+  if (!m) return null;
+  const numStr = m[1] ?? m[3];
+  const unitStr = (m[2] ?? m[4] ?? "").toLowerCase();
+  const n = Number(numStr);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  let minutes: number;
+  if (unitStr.startsWith("dia")) minutes = n * 24 * 60;
+  else if (unitStr.startsWith("h")) minutes = n * 60;
+  else minutes = n; // minuto(s)/min(s)
+  if (minutes > 30 * 24 * 60) return null; // sanidade: máx. 30 dias de antecedência
+  return { leadMinutes: minutes, raw: m[0] };
+}
+
 /**
  * Comandos curtos (opções numéricas, "cancela", "já fiz"...) não devem
  * receber o ack automático — a resposta final já é imediata e uma só.

@@ -3790,7 +3790,7 @@ Responda *sim* para ${fmt(intent.amount)} ou *não* para manter ${fmt(prevAmount
           }
           const guarded = actions.guardSplitByEvidence(bulkSource, items as any);
           if (!guarded.ok) { replyText = guarded.replyText; break; }
-          replyText = (await actions.processBulk(profile.id, guarded.items as any)).replyText; break;
+          replyText = (await actions.processBulk(profile.id, guarded.items as any, bulkSource)).replyText; break;
         }
 
         case "financial_validation_error":

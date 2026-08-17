@@ -30,7 +30,19 @@ function fmtDateSP(iso: string): string {
   }).format(new Date(iso));
 }
 
-function buildMessage(kind: string, appt: { title: string; scheduled_at: string }): string {
+function describeLeadMinutes(minutes: number): string {
+  if (minutes % (24 * 60) === 0) {
+    const d = minutes / (24 * 60);
+    return `${d} dia${d === 1 ? "" : "s"}`;
+  }
+  if (minutes % 60 === 0) {
+    const h = minutes / 60;
+    return `${h} hora${h === 1 ? "" : "s"}`;
+  }
+  return `${minutes} minutos`;
+}
+
+function buildMessage(kind: string, appt: { title: string; scheduled_at: string }, customLeadMinutes?: number | null): string {
   const t = fmtTimeSP(appt.scheduled_at);
   const d = fmtDateSP(appt.scheduled_at);
   switch (kind) {
@@ -44,6 +56,10 @@ function buildMessage(kind: string, appt: { title: string; scheduled_at: string 
       return `⏰ *Faltam 1 hora* para o seu compromisso:\n\n📌 *${appt.title}*\n🕒 ${t}`;
     case "before_30m":
       return `⏰ *Faltam 30 minutos* para o seu compromisso:\n\n📌 *${appt.title}*\n🕒 ${t}\n\nCaso tenha mudado algo, é só me avisar.`;
+    case "custom": {
+      const label = customLeadMinutes ? describeLeadMinutes(customLeadMinutes) : "pouco tempo";
+      return `⏰ *Faltam ${label}* para o seu compromisso (como você pediu):\n\n📌 *${appt.title}*\n🕒 ${t}`;
+    }
 
     default:
       return `🔔 Lembrete: ${appt.title} — ${d} ${t}`;
@@ -61,7 +77,7 @@ async function handle(request: Request) {
   // Puxa reminders pendentes já vencidos (inclui atrasados = watchdog).
   const { data: reminders, error } = await supabaseAdmin
     .from("appointment_reminders")
-    .select("id, appointment_id, user_id, kind, scheduled_for, attempts")
+    .select("id, appointment_id, user_id, kind, scheduled_for, attempts, custom_lead_minutes")
     .eq("status", "pending")
     .lte("scheduled_for", new Date().toISOString())
     .order("scheduled_for", { ascending: true })
@@ -105,7 +121,7 @@ async function handle(request: Request) {
       skipped++; continue;
     }
 
-    const text = buildMessage(r.kind, appt);
+    const text = buildMessage(r.kind, appt, (r as any).custom_lead_minutes);
     const res = await sendWhatsAppText(phone, text);
 
     if (res.ok) {

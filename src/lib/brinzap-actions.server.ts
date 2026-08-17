@@ -8,6 +8,7 @@ import { writeVerifiedTransaction, type PersistedTransaction } from "./transacti
 import { pickReply, pickReplySync, maybeDashboardLink } from "./wa-replies";
 import { billInstallmentInfo, nextDueFromDaySP, formatYMDBr, type BillInstallmentPatch } from "./bill-installments";
 import { ptNumberWordsToDigits, parseMoneyAmount, parseMoneyToken, MONEY_TOKEN_PATTERN } from "@/lib/money-speech";
+import { detectCustomReminderLeadMinutes } from "@/lib/appointment-nlp.server";
 
 
 // Lookup rápido do phone do usuário para variar respostas sem repetir.
@@ -472,6 +473,31 @@ export async function recordAppointment(
     return { replyText: "Não consegui criar o compromisso 🙏." };
   }
 
+  // Pedido explícito de lembrete customizado ("me avisar com 30 minutos de
+  // antecedência", "avisar 2 horas antes") — bug real corrigido: antes esse
+  // texto só virava ruído (ou lixo dentro do título), nunca criava um
+  // lembrete de verdade. Funciona igual vindo de texto ou de áudio
+  // transcrito, já que source_text carrega a mensagem original em ambos os
+  // casos. Complementa (não substitui) os 5 horários fixos padrão.
+  let customReminderLine = "";
+  const customLead = inserted ? detectCustomReminderLeadMinutes(input.source_text ?? "") : null;
+  if (inserted && customLead) {
+    const reminderAt = new Date(when.getTime() - customLead.leadMinutes * 60_000);
+    if (reminderAt.getTime() > Date.now()) {
+      const { error: remError } = await supabaseAdmin.from("appointment_reminders").upsert({
+        appointment_id: inserted.id,
+        user_id: userId,
+        kind: "custom",
+        custom_lead_minutes: customLead.leadMinutes,
+        scheduled_for: reminderAt.toISOString(),
+        status: "pending",
+      } as any, { onConflict: "appointment_id,kind" });
+      if (!remError) {
+        customReminderLine = `\n\n🔔 Vou te avisar ${describeLeadMinutes(customLead.leadMinutes)} antes.`;
+      }
+    }
+  }
+
   const header = await pickReply("appointment_header", await phoneOf(userId));
   const footer = pickReplySync("appointment_footer");
   return {
@@ -480,10 +506,22 @@ export async function recordAppointment(
 `${header}
 
 📝 ${title}
-🕒 ${formatDatePT(scheduled_at)}
+🕒 ${formatDatePT(scheduled_at)}${customReminderLine}
 
 ${footer}`,
   };
+}
+
+function describeLeadMinutes(minutes: number): string {
+  if (minutes % (24 * 60) === 0) {
+    const d = minutes / (24 * 60);
+    return `${d} dia${d === 1 ? "" : "s"}`;
+  }
+  if (minutes % 60 === 0) {
+    const h = minutes / 60;
+    return `${h} hora${h === 1 ? "" : "s"}`;
+  }
+  return `${minutes} minutos`;
 }
 
 // ===== Queries =====
@@ -2581,6 +2619,7 @@ export function guardSplitByEvidence(
 export async function processBulk(
   userId: string,
   items: Array<Record<string, any>>,
+  rawText?: string,
 ): Promise<{ replyText: string; ok: boolean }> {
   const created: Array<{ kind: string; category?: string; amount?: number; title?: string }> = [];
   let failed = 0;
@@ -2615,7 +2654,11 @@ export async function processBulk(
           // usuário dizendo que um compromisso novo foi criado quando na
           // verdade nada aconteceu.
           if (it.scheduled_at) {
-            const r = await recordAppointment(userId, { title: it.appointment_title ?? it.title ?? it.description ?? "Compromisso", scheduled_at: it.scheduled_at, notes: it.description });
+            // rawText (a mensagem original) é repassado como source_text pra
+            // que um pedido de lembrete customizado no fim da lista ("me
+            // avisar 30 minutos antes de cada") valha pra CADA compromisso
+            // do lote, não só pra um item isolado.
+            const r = await recordAppointment(userId, { title: it.appointment_title ?? it.title ?? it.description ?? "Compromisso", scheduled_at: it.scheduled_at, notes: it.description, source_text: rawText });
             if (r.row) created.push({ kind: "appointment", title: it.appointment_title ?? it.title ?? it.description });
             else failed++;
           } else failed++;
