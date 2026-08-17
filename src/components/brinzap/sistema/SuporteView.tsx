@@ -6,10 +6,10 @@ import { listMyTickets, createTicket } from "@/lib/support.functions";
 
 const FAQ = [
   { q: "Como começo a usar?", a: "Mande mensagens, áudios ou comprovantes para o WhatsApp do Abio. Tudo é registrado automaticamente." },
-  { q: "Como crio uma meta?", a: "Acesse a aba Metas e clique em Nova meta. Você pode acompanhar pelo gráfico e pelo WhatsApp." },
+  { q: "Como crio uma meta?", a: "Acesse a aba Metas e clique em ‘Nova meta’. Acompanhe pela barra de progresso, ou crie dizendo algo como ‘quero juntar R$ 5.000 pra viagem’ no WhatsApp." },
   { q: "Como funcionam os lembretes?", a: "Cadastre em Lembretes ou diga ‘Consulta amanhã 14h’ no WhatsApp." },
-  { q: "Posso exportar relatórios?", a: "Sim. Em Relatórios, escolha o período e baixe em PDF ou Excel." },
-  { q: "Como apago todos os dados?", a: "Em Início, use ‘Zerar Todos os Dados’ na seção Gerenciamento da Conta." },
+  { q: "Posso exportar relatórios?", a: "Sim. Em Sistema → Relatórios, escolha o período, clique em ‘Gerar relatório’ e baixe em PDF ou Excel." },
+  { q: "Como apago todos os dados?", a: "Em Transações, clique em ‘Zerar todos os dados’. Também dá pra dizer ‘zerar meu histórico’ ou ‘apagar tudo’ no WhatsApp — o Abio pede confirmação antes de excluir." },
 ];
 
 export function SuporteView() {
