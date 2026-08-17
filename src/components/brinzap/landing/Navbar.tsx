@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { Globe, Menu, Moon, Sun, X } from "lucide-react";
+import { ArrowRight, Globe, Menu, Moon, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppLogo } from "@/components/brinzap/AppLogo";
 import { useLandingI18n, type Lang } from "@/lib/landing-i18n";
 import { useTheme } from "@/lib/landing-theme";
+import { useAuth } from "@/lib/auth-context";
 
 export function scrollToSection(id: string) {
   document.querySelector(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -15,6 +16,8 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const { theme, toggle } = useTheme();
   const { t, lang, setLang } = useLandingI18n();
+  const { isReady, user } = useAuth();
+  const loggedIn = isReady && !!user;
 
   const links = [
     { href: "#como-funciona", label: t("nav.how") },
@@ -65,12 +68,12 @@ export function Navbar() {
         </nav>
         <span className="lg:hidden" />
 
-        <div className="flex items-center gap-1.5 justify-end">
+        <div className="flex items-center gap-1 sm:gap-1.5 justify-end">
           <button
             onClick={() => setLang(nextLang)}
             aria-label={t("lang.label")}
             title={t("lang.label")}
-            className="hidden sm:inline-flex items-center gap-1.5 h-10 rounded-lg px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            className="hidden sm:inline-flex items-center gap-1.5 h-10 rounded-lg px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 transition-colors"
           >
             <Globe className="h-4 w-4" strokeWidth={1.75} />
             {lang === "pt" ? "PT" : "EN"}
@@ -79,20 +82,44 @@ export function Navbar() {
             onClick={toggle}
             aria-label={t("theme.toggle")}
             title={t("theme.toggle")}
-            className="h-10 w-10 grid place-items-center rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+            className="hidden sm:grid h-10 w-10 place-items-center rounded-lg text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 transition-colors"
           >
             {theme === "dark" ? <Sun className="h-4.5 w-4.5" strokeWidth={1.75} /> : <Moon className="h-4.5 w-4.5" strokeWidth={1.75} />}
           </button>
-          <Link
-            to="/signup"
-            className="inline-flex items-center rounded-lg bg-primary text-primary-foreground font-medium px-4 py-2.5 text-sm hover:bg-primary/90 transition-colors"
-          >
-            {t("cta.start")}
-          </Link>
+
+          {/* CTAs de acesso — sempre visíveis (desktop e mobile), nunca só
+              dentro do menu hambúrguer. "Entrar" fica discreto (texto), sem
+              competir com "Começar grátis" (botão de destaque). Se a pessoa
+              já estiver logada, os dois viram um único "Meu painel". */}
+          {loggedIn ? (
+            <Link
+              to="/app"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground font-medium px-3 sm:px-4 py-2.5 text-sm hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all whitespace-nowrap"
+            >
+              {t("cta.myPanel")} <ArrowRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+            </Link>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                className="inline-flex items-center h-10 rounded-lg px-2 sm:px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 transition-colors whitespace-nowrap"
+              >
+                {t("nav.login")}
+              </Link>
+              <Link
+                to="/signup"
+                search={{ plan: undefined }}
+                className="inline-flex items-center rounded-lg bg-primary text-primary-foreground font-medium px-3 sm:px-4 py-2.5 text-sm hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all whitespace-nowrap"
+              >
+                {t("cta.start")}
+              </Link>
+            </>
+          )}
+
           <button
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "Fechar menu" : "Abrir menu"}
-            className="lg:hidden h-10 w-10 grid place-items-center rounded-lg border border-border bg-card"
+            className="lg:hidden h-10 w-10 grid place-items-center rounded-lg border border-border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
           >
             {open ? <X className="h-5 w-5" strokeWidth={1.75} /> : <Menu className="h-5 w-5" strokeWidth={1.75} />}
           </button>
@@ -127,20 +154,19 @@ export function Navbar() {
                   <Globe className="h-4 w-4" strokeWidth={1.75} /> {lang === "pt" ? "Português" : "English"}
                 </button>
               </div>
-              <Link
-                to="/login"
-                onClick={() => setOpen(false)}
-                className="py-3.5 text-base text-muted-foreground active:text-primary transition-colors"
-              >
-                {t("nav.login")}
-              </Link>
-              <Link
-                to="/signup"
-                onClick={() => setOpen(false)}
-                className="mt-2 mb-2 w-full rounded-lg bg-primary text-primary-foreground font-medium py-3 text-sm text-center"
-              >
-                {t("cta.start")}
-              </Link>
+              {/* Alternador de tema — some da barra compacta no mobile pra
+                  caber "Entrar"/"Começar grátis" sempre visíveis; reaparece
+                  aqui, mesmo padrão já usado pro idioma. */}
+              <div className="flex items-center justify-between py-3.5">
+                <span className="text-base text-muted-foreground">{t("theme.toggle")}</span>
+                <button
+                  onClick={toggle}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm"
+                >
+                  {theme === "dark" ? <Sun className="h-4 w-4" strokeWidth={1.75} /> : <Moon className="h-4 w-4" strokeWidth={1.75} />}
+                  {theme === "dark" ? "Light" : "Dark"}
+                </button>
+              </div>
             </nav>
           </motion.div>
         )}
