@@ -175,9 +175,17 @@ function isUniqueSourceMessageViolation(err: any): boolean {
 }
 
 
-// Detecta duplicidade por conteúdo nos últimos 30s (mesmo usuário+kind+amount,
-// descrição opcionalmente igual). Evita lançamento duplicado quando a Z-API
-// reenvia o webhook com message_id diferente, ou quando a IA reprocessa item.
+// Detecta duplicidade por conteúdo nos últimos segundos (mesmo usuário+kind+
+// amount+descrição+categoria). Evita lançamento duplicado quando a Z-API
+// reenvia o webhook com message_id diferente (nesse caso a proteção real —
+// o índice único em source_message_id — não se aplica, porque o id É
+// diferente). Bug real corrigido: a janela era de 60s, tempo suficiente pra
+// engolir dois lançamentos REAIS e idênticos (ex.: dois cafés de R$5
+// seguidos) como se fossem duplicata técnica. Reenvio de webhook acontece
+// em segundos, não em um minuto inteiro — 8s ainda cobre isso com folga sem
+// descartar repetição humana genuína.
+const CONTENT_DUPLICATE_WINDOW_MS = 8_000;
+
 async function findRecentDuplicate(
   userId: string,
   kind: "expense" | "income",
@@ -185,7 +193,7 @@ async function findRecentDuplicate(
   description?: string | null,
   category?: string | null,
 ): Promise<{ id: string } | null> {
-  const sinceISO = new Date(Date.now() - 60_000).toISOString();
+  const sinceISO = new Date(Date.now() - CONTENT_DUPLICATE_WINDOW_MS).toISOString();
   const { data } = await supabaseAdmin
     .from("transactions")
     .select("id, description, category")
@@ -2222,15 +2230,32 @@ function detectBatchBillContext(rawLines: string[]): BatchBillContext {
 // "Parcela 7/10 Consórcio Brenna — R$ 100,00" — nunca passa pelo moneyMatches
 // genérico (o "7" e o "10" seriam lidos como valores em reais também); tem
 // regex própria pra extrair parcela atual, total e valor por parcela.
-const INSTALLMENT_LINE_RE = /^parcelas?\s+(\d{1,3})\s*\/\s*(\d{1,3})\s+(.+?)\s*[—–-]\s*r?\$?\s*([\d.,]+)\s*$/i;
+// Bug real corrigido: exigia "parcela N/M" no INÍCIO da linha e um separador
+// "—/–/-" antes do valor — "Consórcio parcela 3/10 250" (título antes,
+// sem traço) não batia com nada e a linha inteira era descartada de uma
+// lista mista de contas. Agora acha "parcela N/M" em QUALQUER posição da
+// linha, remove esse trecho, e usa moneyMatches (já testado, com as mesmas
+// guardas contra "dia N"/hora) pra achar o valor no que sobrou — título é
+// o restante da linha.
+const INSTALLMENT_FRAGMENT_RE = /\bparcelas?\s+(\d{1,3})\s*\/\s*(\d{1,3})\b/i;
 
 function parseInstallmentLine(line: string, contextDueDay: number | null): BulkFinancialItem | null {
-  const m = line.match(INSTALLMENT_LINE_RE);
-  if (!m) return null;
-  const current = Number(m[1]);
-  const total = Number(m[2]);
-  const title = titleCasePT(m[3].trim()).slice(0, 60);
-  const amount = parseMoneyBRL(m[4]);
+  const frag = line.match(INSTALLMENT_FRAGMENT_RE);
+  if (!frag) return null;
+  const current = Number(frag[1]);
+  const total = Number(frag[2]);
+  const rest = (line.slice(0, frag.index) + " " + line.slice((frag.index ?? 0) + frag[0].length)).trim();
+  const monies = moneyMatches(rest);
+  if (monies.length !== 1) return null;
+  const money = monies[0];
+  const title = titleCasePT(
+    (rest.slice(0, money.start) + " " + rest.slice(money.end))
+      .replace(/r\$/gi, " ")
+      .replace(/[—–-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  ).slice(0, 60);
+  const amount = money.amount;
   if (!title || !(total >= 1) || !(current >= 1) || current > total || amount == null || !(amount > 0)) return null;
   return {
     kind: "installment",
