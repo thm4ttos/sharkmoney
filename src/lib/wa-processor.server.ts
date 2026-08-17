@@ -1315,6 +1315,22 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       };
 
       const { isConfirmationPhrase } = await import("@/lib/appointment-nlp.server");
+
+      // Bug real corrigido: um compromisso pendente esperando só o título
+      // "roubava" qualquer pergunta não relacionada ("quanto eu gastei esse
+      // mês?") e usava o texto como título do compromisso — a pergunta
+      // financeira nunca era respondida, e um compromisso com título
+      // sem sentido era criado. titleFromText/isVagueApptTitle só filtram
+      // vocabulário de agenda (dia/hora/verbos de agendar), nunca vocabulário
+      // financeiro/interrogativo — por isso a checagem é separada aqui.
+      const looksLikeFinancialOrQuery = (s: string): boolean => {
+        const raw = (s || "").trim();
+        if (!raw) return false;
+        if (/\?\s*$/.test(raw)) return true;
+        if (/\b(quanto|quantos|quantas|qual|quais)\b/i.test(raw)) return true;
+        const hasMoneyWord = /\b(gastei|gasto|paguei|comprei|recebi|ganhei|entrou|caiu|abasteci|saldo|extrato|transa[çc][ãa]o|transa[çc][õo]es|fatura|d[íi]vida|renda)\b/i.test(raw);
+        return hasMoneyWord && actions.moneyMatches(raw).length > 0;
+      };
       // Limpa data/hora do texto para extrair só a descrição (memória de contexto).
       const titleFromText = (s: string) =>
         s
@@ -1389,7 +1405,11 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       }
 
       // --- 0) Rascunho com data/hora aguardando SÓ a descrição ---
-      if (!handled && pending && pending.kind === "appointment_need_title") {
+      if (!handled && pending && pending.kind === "appointment_need_title" && cmd?.action !== "cancel" && looksLikeFinancialOrQuery(inputText)) {
+        // Não consome a mensagem: deixa o resto do pipeline responder o que
+        // foi realmente perguntado, e mantém o rascunho do compromisso vivo
+        // (data/hora já capturadas) pra ser completado numa mensagem futura.
+      } else if (!handled && pending && pending.kind === "appointment_need_title") {
         handled = true;
         if (cmd?.action === "cancel") {
           replyText = await pickApptReply("appointment_cancelled", phone);
@@ -1461,7 +1481,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           // em Alegre"), porque titleFromText não sabia que essa frase era
           // uma resposta sobre horário, não uma descrição nova.
           let draftTitle: string = pending.title ?? "";
-          if (!isConfirmationPhrase(inputText) && !declinesTime.test(inputText)) {
+          if (!isConfirmationPhrase(inputText) && !declinesTime.test(inputText) && !looksLikeFinancialOrQuery(inputText)) {
             const extra = titleFromText(inputText);
             if (extra && !isVagueApptTitle(extra)) draftTitle = extra;
           }
@@ -1518,7 +1538,7 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
         } else {
           // Nunca perder o contexto: mensagem livre vira a descrição do compromisso.
           const raw = inputText.trim().replace(/[.!]+$/, "");
-          if (raw.length <= 60 && !raw.includes("?") && !isVagueApptTitle(raw)) {
+          if (raw.length <= 60 && !raw.includes("?") && !isVagueApptTitle(raw) && !looksLikeFinancialOrQuery(raw)) {
             const actionsMod = await import("@/lib/brinzap-actions.server");
             replyText = (await actionsMod.recordAppointment(profile.id, {
               title: raw.slice(0, 80), scheduled_at: pending.scheduled_at, notes: pending.notes ?? null,
