@@ -1932,7 +1932,7 @@ type SimpleFinancialItem = { kind: "expense" | "income"; amount: number; categor
 type BulkFinancialItem =
   | SimpleFinancialItem
   | { kind: "bill"; amount: number; category: string; title: string; next_due_at?: string }
-  | { kind: "installment"; amount: number; category: string; title: string; installments_total: number; installments_paid: number; total_amount: number; next_due_at?: string };
+  | { kind: "installment"; amount: number; category: string; title: string; installments_total: number; installments_paid: number; total_amount: number; next_due_at?: string; paid_today?: number };
 type SmartFinancialParse =
   | { ok: true; items: BulkFinancialItem[] }
   | { ok: false; replyText: string; reason: "divergence" | "missing_unit" | "ambiguous" };
@@ -2329,8 +2329,57 @@ function toBillItem(item: BulkFinancialItem, contextDueDay: number | null): Bulk
   };
 }
 
+// Bloco "Título\nN parcelas de R$X (paguei M hoje)" — cada bloco separado
+// por linha em branco vira UMA compra parcelada nova. Formato real
+// observado em produção: várias compras parceladas cadastradas de uma vez,
+// cada uma com o título numa linha e o resumo (quantidade × valor +
+// pagamento do dia) na linha seguinte. Bug real corrigido: sem isso, a
+// mensagem inteira caía na IA, que misturava os itens, inventava um valor
+// fantasma de R$1,00 (lido errado de "paguei 1 hoje") e nunca criava as
+// compras parceladas de verdade — só uma despesa avulsa genérica e confusa.
+const INSTALLMENT_BLOCK_DETAIL_RE =
+  /(\d{1,3})\s*parcelas?\s+de\s+r?\$?\s*([\d.,]+)(?:\s*\(\s*pagu?ei\s+(\d{1,3})\s+hoje\s*\))?/i;
+
+function parseInstallmentBlocks(input: string): BulkFinancialItem[] | null {
+  const blocks = input.split(/\r?\n\s*\r?\n/).map((b) => b.trim()).filter(Boolean);
+  if (blocks.length === 0) return null;
+  const items: BulkFinancialItem[] = [];
+  for (const block of blocks) {
+    const lines = block.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    let title = "";
+    let detailMatch: RegExpMatchArray | null = null;
+    for (const line of lines) {
+      const m = line.match(INSTALLMENT_BLOCK_DETAIL_RE);
+      if (m) { detailMatch = m; break; }
+      if (!title && !HEADER_LINE_RE.test(line)) title = line;
+    }
+    if (!detailMatch || !title) continue;
+    const total = Number(detailMatch[1]);
+    const amount = parseMoneyBRL(detailMatch[2]);
+    const paidToday = detailMatch[3] ? Math.min(Number(detailMatch[3]), total) : 0;
+    if (!(total >= 1) || amount == null || !(amount > 0)) continue;
+    items.push({
+      kind: "installment",
+      amount,
+      category: inferCategoryFromText(title),
+      title: titleCasePT(title).slice(0, 60),
+      installments_total: total,
+      installments_paid: 0,
+      total_amount: Math.round(amount * total * 100) / 100,
+      paid_today: paidToday > 0 ? paidToday : undefined,
+    });
+  }
+  return items.length > 0 ? items : null;
+}
+
 export function parseSmartFinancialMessage(input: string): SmartFinancialParse | null {
   if (!input || input.trim().length < 6) return null;
+
+  if (INSTALLMENT_BLOCK_DETAIL_RE.test(input)) {
+    const blockItems = parseInstallmentBlocks(input);
+    if (blockItems && blockItems.length >= 1) return { ok: true, items: blockItems };
+  }
+
   const rawLines = input.split(/\r?\n|;/g).map((l) => l.trim()).filter(Boolean);
   const lineItems: BulkFinancialItem[] = [];
   let skipped = 0;
@@ -2671,7 +2720,22 @@ export async function processBulk(
         }
         case "installment": {
           const r = await recordInstallment(userId, { title: it.title ?? it.description, amount: it.amount, installments_total: it.installments_total, installments_paid: it.installments_paid, total_amount: it.total_amount, next_due_at: it.next_due_at });
-          if (r.ok) created.push({ kind: "installment", title: it.title ?? it.description, amount: it.amount }); else failed++;
+          if (r.ok) {
+            created.push({ kind: "installment", title: it.title ?? it.description, amount: it.amount });
+            // Bug real corrigido: "20 parcelas de R$312 (paguei 1 hoje)" criava
+            // a compra parcelada mas NUNCA registrava o pagamento de hoje como
+            // despesa de verdade — recordInstallment só grava o contador,
+            // nunca movimenta o saldo. Reaproveita o mesmo caminho atômico já
+            // usado quando alguém marca uma parcela como paga manualmente
+            // (cria a transação e incrementa o contador numa única operação).
+            const paidToday = Math.max(0, Math.min(Number(it.paid_today) || 0, 12));
+            if (paidToday > 0 && r.row) {
+              for (let i = 0; i < paidToday; i++) {
+                const pr = await payInstallmentPurchase(userId, r.row.id);
+                if (!pr.ok) break;
+              }
+            }
+          } else failed++;
           break;
         }
         case "debt": {

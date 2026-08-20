@@ -70,3 +70,52 @@ describe("Fase 12.4 — lista espontânea sem a palavra 'fixa' (item 20)", () =>
     }
   });
 });
+
+// Correção crítica — bug real reportado em produção: mensagem com 2 compras
+// parceladas em blocos "Título\nN parcelas de R$X (paguei M hoje)" nunca
+// virava installment de verdade — a IA misturava os dois itens, inventava
+// um valor fantasma de R$1,00 (lido errado de "paguei 1 hoje") e só criava
+// uma despesa avulsa genérica. Nenhuma das duas compras aparecia em Compras
+// Parceladas.
+describe("Fase 12.8 — blocos de compra parcelada com 'paguei N hoje' (correção crítica)", () => {
+  it("mensagem real do bug: 2 blocos -> 2 installments, sem item fantasma", () => {
+    const msg = "compras parceladas\n\nParcelas do simples\n20 parcelas de R$ 312,43 (paguei 1 hoje)\n\nParcelas atraso do MEI\n8 parcelas de R$ 53,01 (paguei 1 hoje)";
+    const r = parseSmartFinancialMessage(msg);
+    expect(r?.ok).toBe(true);
+    if (r?.ok) {
+      expect(r.items.length).toBe(2);
+      for (const it of r.items) expect(it.kind).toBe("installment");
+
+      const simples = r.items.find((i: any) => /simples/i.test(i.title));
+      expect(simples).toBeTruthy();
+      expect((simples as any)?.amount).toBe(312.43);
+      expect((simples as any)?.installments_total).toBe(20);
+      expect((simples as any)?.paid_today).toBe(1);
+      // Nunca existe um item fantasma de R$1,00 (lido errado de "paguei 1 hoje").
+      expect((simples as any)?.amount).not.toBe(1);
+
+      const mei = r.items.find((i: any) => /mei/i.test(i.title));
+      expect(mei).toBeTruthy();
+      expect((mei as any)?.amount).toBe(53.01);
+      expect((mei as any)?.installments_total).toBe(8);
+      expect((mei as any)?.paid_today).toBe(1);
+    }
+  });
+
+  it("bloco único sem 'paguei hoje' -> installment sem paid_today", () => {
+    const r = parseSmartFinancialMessage("Notebook novo\n10 parcelas de R$ 250,00");
+    expect(r?.ok).toBe(true);
+    if (r?.ok) {
+      expect(r.items.length).toBe(1);
+      expect(r.items[0].kind).toBe("installment");
+      expect((r.items[0] as any).paid_today).toBeUndefined();
+      expect((r.items[0] as any).amount).toBe(250);
+    }
+  });
+
+  it("mensagem normal de lista de contas continua funcionando (sem regressão)", () => {
+    const r = parseSmartFinancialMessage("água 80\nluz 120\ninternet 100");
+    expect(r?.ok).toBe(true);
+    if (r?.ok) expect(r.items.length).toBe(3);
+  });
+});
