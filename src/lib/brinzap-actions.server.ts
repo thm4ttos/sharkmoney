@@ -1334,7 +1334,11 @@ export async function applyBillInstallmentFollowUp(
     // Sem dia de vencimento explícito nesta mesma correção: se a conta ainda
     // não tem next_due_at coerente com a nova frequência, ancora em hoje + 1
     // ciclo em vez de deixar uma data de outro ritmo (ex.: mensal → semanal).
-    if (!patch.payment_day && patch.frequency !== "monthly") {
+    // Bug real: essa checagem só olhava patch.payment_day — quando a mesma
+    // correção já trazia um next_due_at explícito (ex.: "toda quinta-feira",
+    // que já resolve pra data da próxima quinta), esse bloco sobrescrevia com
+    // "hoje + 7 dias", ignorando o dia da semana pedido.
+    if (!patch.payment_day && !patch.next_due_at && patch.frequency !== "monthly") {
       update.next_due_at = patch.frequency === "weekly"
         ? new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10)
         : patch.frequency === "biweekly"
@@ -2873,20 +2877,20 @@ function fmtDueDay(next_due_at: string | null | undefined, frequency: string | n
 export async function queryBills(
   userId: string,
   opts?: { filter?: "all" | "upcoming" | "overdue" | "pending"; hint?: string; dueDay?: number },
-): Promise<{ replyText: string }> {
+): Promise<{ replyText: string; items: InstallmentListItem[] }> {
   const { data, error } = await supabaseAdmin
     .from("recurring_bills")
-    .select("title, amount, original_amount, paid_amount, frequency, next_due_at, payment_status, active, category")
+    .select("id, title, amount, original_amount, paid_amount, frequency, next_due_at, payment_status, active, category")
     .eq("user_id", userId)
     .eq("active", true)
     .order("next_due_at", { ascending: true });
   if (error) {
     console.error("[actions] queryBills", error);
-    return { replyText: "Não consegui buscar suas contas fixas agora 🙏." };
+    return { replyText: "Não consegui buscar suas contas fixas agora 🙏.", items: [] };
   }
   let list = (data ?? []) as any[];
   if (list.length === 0) {
-    return { replyText: "📭 Você ainda não possui contas fixas cadastradas.\n\n➕ Deseja cadastrar uma agora? Ex.: _aluguel 900 todo dia 5_" };
+    return { replyText: "📭 Você ainda não possui contas fixas cadastradas.\n\n➕ Deseja cadastrar uma agora? Ex.: _aluguel 900 todo dia 5_", items: [] };
   }
 
   const today = new Date(); today.setUTCHours(0, 0, 0, 0);
@@ -2896,7 +2900,7 @@ export async function queryBills(
   if (hint) {
     const h = list.filter((b) => (b.title || "").toLowerCase().includes(hint) || (b.category || "").toLowerCase().includes(hint));
     if (h.length > 0) list = h;
-    else return { replyText: `🔍 Não encontrei nenhuma conta fixa com "${opts?.hint}". Envie *minhas contas fixas* para ver todas.` };
+    else return { replyText: `🔍 Não encontrei nenhuma conta fixa com "${opts?.hint}". Envie *minhas contas fixas* para ver todas.`, items: [] };
   }
 
   if (opts?.dueDay && Number.isFinite(opts.dueDay)) {
@@ -2906,28 +2910,37 @@ export async function queryBills(
       return d.getUTCDate() === opts.dueDay;
     });
     if (list.length === 0) {
-      return { replyText: `📭 Nenhuma conta fixa vencendo no dia ${opts.dueDay}.` };
+      return { replyText: `📭 Nenhuma conta fixa vencendo no dia ${opts.dueDay}.`, items: [] };
     }
   }
 
   if (opts?.filter === "overdue") {
     list = list.filter((b) => b.next_due_at && new Date(String(b.next_due_at) + "T12:00:00") < today);
-    if (list.length === 0) return { replyText: "✅ Você não possui contas fixas atrasadas. Tudo em dia!" };
+    if (list.length === 0) return { replyText: "✅ Você não possui contas fixas atrasadas. Tudo em dia!", items: [] };
   } else if (opts?.filter === "upcoming") {
     list = list.filter((b) => {
       if (!b.next_due_at) return false;
       const d = new Date(String(b.next_due_at) + "T12:00:00");
       return d >= today && d <= in30;
     });
-    if (list.length === 0) return { replyText: "📭 Nenhuma conta fixa vence nos próximos 30 dias." };
+    if (list.length === 0) return { replyText: "📭 Nenhuma conta fixa vence nos próximos 30 dias.", items: [] };
   } else if (opts?.filter === "pending") {
     list = list.filter((b) => ["pending", "awaiting", "late", "partial"].includes(String(b.payment_status || "pending")));
-    if (list.length === 0) return { replyText: "✅ Nenhuma conta fixa pendente no momento." };
+    if (list.length === 0) return { replyText: "✅ Nenhuma conta fixa pendente no momento.", items: [] };
   }
 
-  // Total considera SALDO RESTANTE do ciclo (nunca o valor original quando já houve pagamento parcial).
+  // Bug real corrigido: a lista não numerava cada conta — depois de "Contas
+  // fixas", uma correção como "1 é toda quinta-feira" (referindo à PRIMEIRA
+  // conta mostrada) não tinha como resolver a qual conta se referia, e o
+  // Abio caía num interrogatório genérico em vez de aplicar direto. Agora
+  // cada linha ganha um número (1, 2, 3...) e a lista fica memorizada
+  // (last_query_context.bills_list) pro número resolver sozinho depois —
+  // mesmo padrão já usado pra "Seus parcelamentos".
   let totalOutstanding = 0;
-  const lines = list.slice(0, 20).map((b) => {
+  const items: InstallmentListItem[] = [];
+  const lines = list.slice(0, 20).map((b, i) => {
+    const n = i + 1;
+    items.push({ n, kind: "bill", id: b.id, title: b.title });
     const emoji = CAT_EMOJI[b.category as string] || "📄";
     const original = Number(b.original_amount ?? b.amount ?? 0);
     const paid = Number(b.paid_amount ?? 0);
@@ -2940,9 +2953,9 @@ export async function queryBills(
       : st === "partial" ? " 🟠"
       : "";
     if (paid > 0 && remaining > 0) {
-      return `${emoji} *${b.title}*\nValor original: ${BRL(original)}\nJá pago: ${BRL(paid)}\nRestante: *${BRL(remaining)}* · ${fmtDueDay(b.next_due_at, b.frequency)}${statusIcon}\nStatus: 🟠 Pagamento parcial`;
+      return `${n} - ${emoji} *${b.title}*\nValor original: ${BRL(original)}\nJá pago: ${BRL(paid)}\nRestante: *${BRL(remaining)}* · ${fmtDueDay(b.next_due_at, b.frequency)}${statusIcon}\nStatus: 🟠 Pagamento parcial`;
     }
-    return `${emoji} *${b.title}*\n${BRL(original)} · ${fmtDueDay(b.next_due_at, b.frequency)}${statusIcon}`;
+    return `${n} - ${emoji} *${b.title}*\n${BRL(original)} · ${fmtDueDay(b.next_due_at, b.frequency)}${statusIcon}`;
   });
 
   const header = opts?.filter === "overdue" ? "🔴 *Contas fixas atrasadas*"
@@ -2954,6 +2967,7 @@ export async function queryBills(
 
   return {
     replyText: `${header}\n\n${lines.join("\n\n")}\n\n💰 *Total ainda pendente:* ${BRL(totalOutstanding)}${list.length > 20 ? `\n\n_Exibindo 20 de ${list.length}._` : ""}`,
+    items,
   };
 }
 

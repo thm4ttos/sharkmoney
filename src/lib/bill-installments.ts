@@ -32,6 +32,44 @@ function norm(s: string): string {
 }
 
 
+const WEEKDAY_NUM: Record<string, number> = {
+  domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
+};
+
+/** Próxima data (YYYY-MM-DD, fuso SP) em que cai um dia da semana, a partir de hoje (inclusive). */
+function nextWeekdaySP(target: number, fromYMD?: string): string {
+  const base = fromYMD
+    ?? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [y, m, d] = base.split("-").map(Number);
+  const cur = new Date(Date.UTC(y!, m! - 1, d!, 12));
+  const diff = (target - cur.getUTCDay() + 7) % 7;
+  cur.setUTCDate(cur.getUTCDate() + diff);
+  return cur.toISOString().slice(0, 10);
+}
+
+/**
+ * Frequência de recorrência: "toda quinta-feira", "semanal", "quinzenal",
+ * "todo ano"/"anual". Quando um dia da semana é citado, também resolve a
+ * data do próximo vencimento (não dá pra saber só pela frequência).
+ *
+ * Bug real corrigido: essa correção não existia — "Corrigindo é toda semana,
+ * nas quinta-feira" não batia com nenhum parser de patch, então a mensagem
+ * caía num interrogatório genérico ou, pior, virava um compromisso fantasma
+ * com o texto da correção como título.
+ */
+export function parseFrequencyFollowUp(raw: string): { frequency?: string; next_due_at?: string } | null {
+  const t = norm(raw);
+  const weekdayMatch = t.match(/\b(domingo|segunda|terca|quarta|quinta|sexta|sabado)(?:-feira)?s?\b/);
+  if (weekdayMatch && /\b(toda|todas|todo|cada)\b/.test(t)) {
+    return { frequency: "weekly", next_due_at: nextWeekdaySP(WEEKDAY_NUM[weekdayMatch[1]]!) };
+  }
+  if (/\b(semanal|toda\s+semana|todas\s+as\s+semanas)\b/.test(t)) return { frequency: "weekly" };
+  if (/\b(quinzenal|a\s+cada\s+15\s+dias|a\s+cada\s+duas\s+semanas|quinze\s+em\s+quinze\s+dias)\b/.test(t)) return { frequency: "biweekly" };
+  if (/\b(anual|todo\s+ano|todos\s+os\s+anos|uma\s+vez\s+por\s+ano)\b/.test(t)) return { frequency: "yearly" };
+  if (/\b(mensal|todo\s+mes|todos\s+os\s+meses)\b/.test(t)) return { frequency: "monthly" };
+  return null;
+}
+
 const ORDINAL_PAID: Record<string, number> = {
   primeira: 1, segunda: 2, terceira: 3, quarta: 4, quinta: 5, sexta: 6,
   setima: 7, oitava: 8, nona: 9, decima: 10, "decima primeira": 11,
@@ -175,6 +213,9 @@ export function parseBillFollowUp(raw: string, total?: number | null): BillInsta
   if (day) patch.payment_day = day;
   const correctedAmount = parseCorrectedAmount(raw);
   if (correctedAmount !== null) patch.amount = correctedAmount;
+  const freq = parseFrequencyFollowUp(raw);
+  if (freq?.frequency) patch.frequency = freq.frequency;
+  if (freq?.next_due_at && !patch.next_due_at) patch.next_due_at = freq.next_due_at;
   return Object.keys(patch).length > 0 ? patch : null;
 }
 
