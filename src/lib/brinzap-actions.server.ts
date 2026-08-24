@@ -267,7 +267,7 @@ export async function recordExpense(
 ): Promise<{ replyText: string; ok: boolean; row?: PersistedTransaction; duplicate?: boolean }> {
   const parsed = ExpenseSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, replyText: "Hmm, não captei o valor 🤔\nPode mandar de novo? Exemplo:\n• _gastei 50 no mercado_" };
+    return { ok: false, replyText: pickReplySync("error_amount") };
   }
   const data = parsed.data;
   const inferredCategory = inferCategoryFromText(`${data.description ?? ""} ${data.category ?? ""}`);
@@ -278,7 +278,7 @@ export async function recordExpense(
   const dup = await findRecentDuplicate(userId, "expense", data.amount, data.description, category);
   if (dup) {
     await logDuplicate({ userId, reason: "duplicate_content_60s", kind: "expense", amount: data.amount, description: data.description, matchedTxId: dup.id });
-    return { ok: true, duplicate: true, replyText: "Esse lançamento já foi registrado." };
+    return { ok: true, duplicate: true, replyText: pickReplySync("duplicate") };
   }
 
   // "no cartão X" / "no crédito" — vincula a despesa à fatura certa sem
@@ -304,7 +304,7 @@ export async function recordExpense(
   } catch (error: any) {
     if (isUniqueSourceMessageViolation(error)) {
       await logDuplicate({ userId, reason: "duplicate_source_message", kind: "expense", amount: data.amount, description: data.description });
-      return { ok: true, duplicate: true, replyText: "Esse lançamento já foi registrado." };
+      return { ok: true, duplicate: true, replyText: pickReplySync("duplicate") };
     }
     console.error("[actions] recordExpense", error);
     return { ok: false, replyText: "Ocorreu um erro interno e o gasto não foi confirmado. Tente novamente em instantes." };
@@ -354,7 +354,7 @@ export async function recordIncome(
 ): Promise<{ replyText: string; ok: boolean; row?: PersistedTransaction; duplicate?: boolean }> {
   const parsed = IncomeSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, replyText: "Não captei o valor da receita 🤔\nExemplo: _recebi 2000_" };
+    return { ok: false, replyText: pickReplySync("error_income_amount") };
   }
   const { amount, description, occurred_at } = parsed.data;
 
@@ -376,7 +376,7 @@ export async function recordIncome(
   } catch (error: any) {
     if (isUniqueSourceMessageViolation(error)) {
       await logDuplicate({ userId, reason: "duplicate_source_message", kind: "income", amount, description });
-      return { ok: true, duplicate: true, replyText: "Esse lançamento já foi registrado." };
+      return { ok: true, duplicate: true, replyText: pickReplySync("duplicate") };
     }
     console.error("[actions] recordIncome", error);
     return { ok: false, replyText: "Ocorreu um erro interno e a receita não foi confirmada. Tente novamente em instantes." };
@@ -1873,8 +1873,9 @@ export async function correctLastTransaction(
 
   const label = target.description || target.category || "lançamento";
   const saldoLine = `🏦 Saldo do mês: *${BRL(bal.balance)}*`;
+  const header = await pickReply("edit_ok", await phoneOf(userId));
   if (field === "amount") {
-    return { ok: true, replyText: `✅ Lançamento atualizado com sucesso!
+    return { ok: true, replyText: `${header}
 
 📝 Descrição: ${label}
 💰 Valor anterior: ${BRL(Number(oldValue))}
@@ -1882,13 +1883,13 @@ export async function correctLastTransaction(
 ${saldoLine}` };
   }
   if (field === "payment_method") {
-    return { ok: true, replyText: `✅ Lançamento atualizado com sucesso!
+    return { ok: true, replyText: `${header}
 
 📝 Descrição: ${label}
 💳 Forma de pagamento: ${input.new_payment_method}
 ${saldoLine}` };
   }
-  return { ok: true, replyText: `✅ Lançamento atualizado com sucesso!
+  return { ok: true, replyText: `${header}
 
 📝 Descrição: ${label}
 ${field === "category" ? "🏷️ Nova categoria" : "📝 Nova descrição"}: ${newValue}
@@ -2671,10 +2672,26 @@ export async function processBulk(
   rawText?: string,
 ): Promise<{ replyText: string; ok: boolean }> {
   const created: Array<{ kind: string; category?: string; amount?: number; title?: string }> = [];
+  const uncertain: Array<{ kind: string; title?: string; amount?: number }> = [];
   let failed = 0;
+
+  // Item de lista (bulk) com confiança baixa não pode ser executado às
+  // cegas só porque OUTROS itens da mesma mensagem são claros — cada item
+  // carrega sua própria confiança (ver ai-classify.server.ts). Mesma regra
+  // já valia pra lançamento único (gateConfidence em ai-confidence.server.ts);
+  // bug real corrigido: antes, todo item de bulk executava direto,
+  // ignorando confiança mesmo quando <0.35 (o sistema nunca deveria
+  // executar sozinho nesse caso).
+  const { gateConfidence } = await import("./ai-confidence.server");
+  const GATED_KINDS = new Set(["expense", "income", "bill", "installment", "debt", "goal"]);
 
   for (const it of items) {
     try {
+      const gate = gateConfidence(typeof it.confidence === "number" ? it.confidence : undefined);
+      if ((gate === "ask" || gate === "menu") && GATED_KINDS.has(it.kind)) {
+        uncertain.push({ kind: it.kind, title: it.title ?? it.description ?? it.appointment_title, amount: it.amount });
+        continue;
+      }
       switch (it.kind) {
         case "expense": {
           const inferred = inferCategoryFromText(`${it.description ?? ""} ${it.title ?? ""}`);
@@ -2757,7 +2774,19 @@ export async function processBulk(
     }
   }
 
+  const uncertainLines = uncertain.map((u) => {
+    const label = (u.title ?? "item").toString();
+    const value = u.amount != null ? ` (${BRL(u.amount)})` : "";
+    return `• ${label}${value}`;
+  });
+
   if (created.length === 0) {
+    if (uncertain.length > 0) {
+      return {
+        ok: false,
+        replyText: `🤔 Não tive certeza sobre ${uncertain.length === 1 ? "esse item" : "esses itens"} da lista — prefiro confirmar antes de registrar:\n\n${uncertainLines.join("\n")}\n\nPode me confirmar os detalhes de cada um?`,
+      };
+    }
     return {
       ok: false,
       replyText: failed
@@ -2808,12 +2837,15 @@ export async function processBulk(
   const detail = `\n\n━━━━━━━━━━━━━━\n${lines.join("\n")}`;
   const totalLine = totalValue > 0 ? `\n\n💰 *Total registrado:* ${BRL(totalValue)}` : "";
   const warn = failed ? `\n\n⚠️ ${failed} ite${failed === 1 ? "m" : "ns"} não pude registrar — pode reenviar só ess${failed === 1 ? "e" : "es"}.` : "";
+  const uncertainNote = uncertain.length > 0
+    ? `\n\n🤔 Não tive certeza sobre ${uncertain.length === 1 ? "este" : "estes"} e não registrei ainda:\n${uncertainLines.join("\n")}\n\nPode confirmar os detalhes?`
+    : "";
   const bal = await getMonthBalance(userId);
   const balanceLine = `\n\n💰 Saldo do mês: *${BRL(bal.balance)}*`;
 
   return {
     ok: true,
-    replyText: `${header}${detail}${totalLine}${balanceLine}${warn}`,
+    replyText: `${header}${detail}${totalLine}${balanceLine}${warn}${uncertainNote}`,
   };
 }
 
@@ -3394,9 +3426,10 @@ export async function applyEditToLastTransaction(
 
   if (patch.kind === "delete") {
     await supabaseAdmin.from("transactions").delete().eq("id", tx.id).eq("user_id", userId);
+    const header = await pickReply("delete_ok", await phoneOf(userId));
     return {
       ok: true,
-      replyText: `🗑️ Pronto! Removi o lançamento *${label}* de *${amountStr}*.\n\nSe foi engano meu, é só me mandar de novo. 💙`,
+      replyText: `${header}\n\n📝 *${label}* de *${amountStr}*.\n\nSe foi engano meu, é só me mandar de novo. 💙`,
     };
   }
 
@@ -3427,9 +3460,10 @@ export async function applyEditToLastTransaction(
     return { ok: false, replyText: "Ops! Não consegui atualizar agora. Tente novamente em instantes." };
   }
 
+  const editHeader = await pickReply("edit_ok", await phoneOf(userId));
   return {
     ok: true,
-    replyText: `✅ Pronto! Ajustei o lançamento *${label}* de *${amountStr}*.\n\n${confirmLine}`,
+    replyText: `${editHeader}\n\n📝 *${label}* de *${amountStr}*.\n\n${confirmLine}`,
   };
 }
 
@@ -3544,10 +3578,11 @@ export async function applyPartialBillPayment(
   }
 
 
+  const partialHeader = await pickReply("partial_ok", await phoneOf(userId));
   return {
     ok: true,
     replyText:
-`✅ *Pagamento parcial registrado!*
+`${partialHeader}
 
 📌 Conta: *${(bill as any).title}*
 💸 Pago agora: *${BRL(paidNow)}*
@@ -4131,7 +4166,7 @@ export async function confirmDeleteEntry(
       const bal = await getMonthBalance(userId);
       return {
         ok: true,
-        replyText: `✅ Excluído${pending.label ? `: *${pending.label}*` : ""}.\n\n💰 Saldo do mês: *${BRL(bal.balance)}*`,
+        replyText: `${await pickReply("delete_ok", await phoneOf(userId))}${pending.label ? `\n\n📝 *${pending.label}*` : ""}\n\n💰 Saldo do mês: *${BRL(bal.balance)}*`,
       };
     }
 

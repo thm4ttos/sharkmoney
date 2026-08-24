@@ -84,6 +84,8 @@ export type ClassifyItem = {
   is_average?: boolean;
   /** Quantos meses fechados formam a janela de média (padrão 3), só quando is_average=true. */
   average_months?: number;
+  /** Confiança 0-1 deste item específico (relevante dentro de kind=bulk — cada item da lista pode ter uma confiança diferente). Ausente = tratado como 1 (execução direta), mesma convenção do campo de nível principal. */
+  confidence?: number;
 };
 
 export type ClassifyResult = ClassifyItem & {
@@ -216,6 +218,7 @@ const ITEM_FIELDS = {
   filter: { type: "string", enum: ["all", "upcoming", "overdue", "pending"], description: "Só em query_bills: recorte pedido — overdue='atrasadas', upcoming='vencendo em breve', pending='pendentes de pagamento'. Deixe 'all' (ou vazio) para 'todas as contas'." },
   is_average: { type: "boolean", description: "Só em query_summary: true quando o usuário perguntou 'normalmente'/'em média'/'costumo gastar'/'média mensal' SEM citar um período explícito — pede uma janela histórica, não um mês específico." },
   average_months: { type: "number", description: "Só quando is_average=true: quantos meses fechados considerar. Use 3 salvo o usuário pedir outro número explicitamente (ex.: 'média dos últimos 6 meses' → 6)." },
+  confidence: { type: "number", description: "Confiança DESTE item específico, mesma escala 0-1 do campo de confiança do nível principal (0.70+ executa direto, 0.50-0.69 executa e aprende, 0.35-0.49 pede confirmação, <0.35 nunca executa sozinho). Em kind=bulk cada item tem sua PRÓPRIA confiança — é comum um item da lista ser claro (0.9) e outro, na mesma mensagem, ser ambíguo (0.3)." },
 } as const;
 
 const ITEM_KIND_ENUM = ["expense", "income", "appointment", "bill", "installment", "debt", "goal"] as const;
