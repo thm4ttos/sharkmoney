@@ -147,9 +147,38 @@ export async function keepAppointment(appt: AppointmentRow, phone: string): Prom
   return `${base}\n\n📌 ${appt.title}\n🕒 ${prettyAppointmentDate(appt.scheduled_at)}`;
 }
 
+function spParts(d: Date) {
+  const f = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SP_TZ, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => Number(f.find((p) => p.type === t)?.value ?? 0);
+  return { y: get("year"), m: get("month"), d: get("day"), hh: get("hour"), mm: get("minute") };
+}
+
+function isoFromSP(y: number, m: number, d: number, hh: number, mm: number): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return new Date(`${y}-${p(m)}-${p(d)}T${p(hh)}:${p(mm)}:00-03:00`).toISOString();
+}
+
+/** Um dia depois, em termos de calendário SP (nunca em horas UTC cruas). */
+function nextDaySP(y: number, m: number, d: number) {
+  const t = new Date(Date.UTC(y, m - 1, d, 12));
+  t.setUTCDate(t.getUTCDate() + 1);
+  return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+}
+
 /**
  * Mescla uma nova data/hora parcial com o horário atual do compromisso
  * (ex.: "passa para sexta" mantém a hora; "coloca às 20h" mantém o dia).
+ *
+ * Bug real corrigido: a versão anterior misturava `setUTCHours` (horas em
+ * UTC) com uma data que já tinha sido calculada em horário de SP (UTC-3) —
+ * como qualquer horário de SP entre 21h e 23h59 vira UTC do dia SEGUINTE
+ * (ex.: 21:30 em SP = 00:30 UTC do dia seguinte), copiar só a "hora UTC"
+ * sem ajustar o dia jogava o compromisso pro dia ERRADO (26 em vez de 27).
+ * Agora tudo é lido e montado em componentes de calendário de SP
+ * (spParts/isoFromSP), nunca em números de hora UTC crus.
  */
 export function mergeReschedule(
   currentIso: string, nat: { iso: string | null; hasDate: boolean; hasTime: boolean },
@@ -159,16 +188,24 @@ export function mergeReschedule(
   const next = new Date(nat.iso);
   if (isNaN(next.getTime())) return null;
   if (isNaN(cur.getTime()) || (nat.hasDate && nat.hasTime)) return next.toISOString();
+
+  const curSP = spParts(cur);
+  const nextSP = spParts(next);
+
   if (nat.hasTime && !nat.hasDate) {
-    const merged = new Date(cur);
-    merged.setUTCHours(next.getUTCHours(), next.getUTCMinutes(), 0, 0);
-    // Se o horário resultante já passou, joga para o próximo dia.
-    if (merged.getTime() <= Date.now()) merged.setUTCDate(merged.getUTCDate() + 1);
-    return merged.toISOString();
+    // Mantém o DIA atual, troca só a hora — mas se a hora resultante já
+    // passou hoje (em SP), joga pro dia seguinte (em SP, não em UTC).
+    let { y, m, d } = curSP;
+    let merged = isoFromSP(y, m, d, nextSP.hh, nextSP.mm);
+    if (new Date(merged).getTime() <= Date.now()) {
+      ({ y, m, d } = nextDaySP(y, m, d));
+      merged = isoFromSP(y, m, d, nextSP.hh, nextSP.mm);
+    }
+    return merged;
   }
   if (nat.hasDate && !nat.hasTime) {
-    next.setUTCHours(cur.getUTCHours(), cur.getUTCMinutes(), 0, 0);
-    return next.toISOString();
+    // Mantém a HORA atual, troca só o dia.
+    return isoFromSP(nextSP.y, nextSP.m, nextSP.d, curSP.hh, curSP.mm);
   }
   return next.toISOString();
 }

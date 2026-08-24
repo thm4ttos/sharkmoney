@@ -1436,16 +1436,27 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
       else if (!handled && pending && pending.kind === "appointment_draft") {
         handled = true;
         const choice = cmd?.action ?? readAppointmentChoice(inputText);
+        // Bug real corrigido: depois de perguntar "qual dia?", um número
+        // solto ("27") não era reconhecido — o parser geral só entende dia
+        // do mês com a palavra "dia" na frente ("dia 27"), e a pessoa tinha
+        // que digitar de novo com essa palavra. Aqui o contexto já deixou
+        // claro que só falta o DIA (pending.has_date é falso), então um
+        // número solto de 1 a 31 é reinterpretado como "dia N" antes de
+        // seguir — sem afetar o parser geral usado no resto do fluxo.
+        const bareDayMatch = !pending.has_date && !nat.hasDate ? inputText.trim().match(/^(\d{1,2})$/) : null;
+        const effectiveNat = bareDayMatch && Number(bareDayMatch[1]) >= 1 && Number(bareDayMatch[1]) <= 31
+          ? parseFutureDateTimeSP(`dia ${bareDayMatch[1]}`)
+          : nat;
         if (choice === "cancel") {
           replyText = await pickApptReply("appointment_cancelled", phone);
           await clearPending();
         } else {
           const prev = pending.partial_iso ? new Date(pending.partial_iso) : null;
           let finalIso: string | null = null;
-          if (nat.hasDate && nat.hasTime) finalIso = nat.iso;
-          else if (nat.iso && prev && !isNaN(prev.getTime())) {
-            finalIso = appts.mergeReschedule(prev.toISOString(), nat);
-          } else if (nat.iso) finalIso = nat.iso;
+          if (effectiveNat.hasDate && effectiveNat.hasTime) finalIso = effectiveNat.iso;
+          else if (effectiveNat.iso && prev && !isNaN(prev.getTime())) {
+            finalIso = appts.mergeReschedule(prev.toISOString(), effectiveNat);
+          } else if (effectiveNat.iso) finalIso = effectiveNat.iso;
           else if (choice === "confirm" && pending.partial_iso && pending.has_date && pending.has_time) {
             finalIso = pending.partial_iso;
           }
@@ -1480,8 +1491,16 @@ async function processInboundMessageCore(row: any): Promise<ProcessResult> {
           // virou o TÍTULO do compromisso (sobrescrevendo "prova Policia
           // em Alegre"), porque titleFromText não sabia que essa frase era
           // uma resposta sobre horário, não uma descrição nova.
+          // Bug real corrigido: clicar no botão "Outro dia" (resposta à
+          // pergunta de qual dia é) sobrescrevia o título correto (vindo da
+          // imagem/OCR, ex.: "Corte disfarçado") com o texto literal "Outro
+          // dia" — isVagueApptTitle só removia a palavra "dia" da frase,
+          // sobrando "outro" (5 letras, não considerado vago). "Outro dia"
+          // já tinha sido reconhecido como COMANDO (cmd, RESCHEDULE_EXACT)
+          // logo acima — nunca é uma descrição nova, então `!cmd` bloqueia
+          // a extração de título sempre que o texto já é um comando conhecido.
           let draftTitle: string = pending.title ?? "";
-          if (!isConfirmationPhrase(inputText) && !declinesTime.test(inputText) && !looksLikeFinancialOrQuery(inputText)) {
+          if (!cmd && !isConfirmationPhrase(inputText) && !declinesTime.test(inputText) && !looksLikeFinancialOrQuery(inputText)) {
             const extra = titleFromText(inputText);
             if (extra && !isVagueApptTitle(extra)) draftTitle = extra;
           }
