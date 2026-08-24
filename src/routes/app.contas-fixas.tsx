@@ -323,6 +323,24 @@ function BillDialog({ initial, onClose, onSave, saving }: { initial: any | null;
   const [totalInst, setTotalInst] = useState(initial?.total_installments ? String(initial.total_installments) : "");
   const [paidInst, setPaidInst] = useState(String(initial?.paid_installments ?? 0));
 
+  // Bug real reportado: marcar uma conta semanal como paga avançava
+  // next_due_at a partir da data ANTIGA (ex.: 22/08 já vencida + 7 dias =
+  // 29/08, um sábado) em vez de a partir de HOJE — se a data guardada nunca
+  // tinha o dia da semana certo pra começar, o "+7" só carregava o erro
+  // adiante. Este botão deixa o usuário reancorar o vencimento em "hoje +
+  // 1 ciclo" com um clique, sem precisar navegar no calendário.
+  const setNextDueFromToday = () => {
+    const d = new Date();
+    if (frequency === "weekly") d.setDate(d.getDate() + 7);
+    else if (frequency === "biweekly") d.setDate(d.getDate() + 14);
+    else if (frequency === "yearly") d.setFullYear(d.getFullYear() + 1);
+    else d.setMonth(d.getMonth() + 1);
+    setNextDue(d.toISOString().slice(0, 10));
+  };
+  const nextDueButtonLabel: Record<string, string> = {
+    weekly: "📅 Daqui 7 dias", biweekly: "📅 Daqui 14 dias", monthly: "📅 Daqui 1 mês", yearly: "📅 Daqui 1 ano",
+  };
+
   const submit = () => onSave({
     title, category, amount: parseFloat(amount.replace(",", ".")), frequency,
     next_due_at: nextDue, notify_whatsapp: notify, active: true,
@@ -368,6 +386,10 @@ function BillDialog({ initial, onClose, onSave, saving }: { initial: any | null;
             <div>
               <label className="text-xs text-muted-foreground">Próximo vencimento</label>
               <input type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} className="mt-1 w-full bg-input rounded-xl px-3 py-2.5 text-sm" />
+              <button type="button" onClick={setNextDueFromToday}
+                className="mt-1.5 text-[11px] text-primary hover:underline">
+                {nextDueButtonLabel[frequency] ?? "📅 Definir a partir de hoje"}
+              </button>
             </div>
           </div>
           <div className="rounded-2xl border border-border bg-background/30 p-3 space-y-3">
